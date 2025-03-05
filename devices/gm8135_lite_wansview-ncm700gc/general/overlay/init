@@ -1,0 +1,37 @@
+#!/bin/sh
+
+on_exit() {
+	mountpoint -q /proc && umount /proc
+	exec /sbin/init "$*"
+}
+
+trap on_exit EXIT
+
+mount -t proc proc /proc || exit 1
+grep -q overlay /proc/filesystems || exit 1
+
+mtdblkdev=$(awk -F ':' '/rootfs_data|USER/ {print $1}' /proc/mtd | sed 's/mtd/mtdblock/')
+mtdchrdev=$(grep 'rootfs_data\|USER' /proc/mtd | cut -d: -f1)
+if ! mount -t jffs2 /dev/$mtdblkdev /overlay || dmesg | grep -q "jffs2.*: Magic bitmask.*not found"; then
+	mountpoint -q /overlay && umount /overlay
+	echo "Formatting flash..."
+	flash_eraseall /dev/$mtdchrdev
+	if ! mount -t jffs2 /dev/$mtdblkdev /overlay && ! mount -t tmpfs tmpfs /overlay; then
+		echo "Cannot mount /overlay."
+		exit 1
+	fi
+fi
+
+overlay_rootdir=/overlay/root
+overlay_workdir=/overlay/work
+mkdir -p $overlay_rootdir $overlay_workdir
+if ! mount -t overlay overlay -o lowerdir=/,upperdir=$overlay_rootdir,workdir=$overlay_workdir /mnt; then
+	echo "Cannot mount /mnt."
+	umount /overlay
+	exit 1
+fi
+
+pivot_root /mnt /mnt/rom
+mount -o noatime,move /rom/proc /proc
+mount -o noatime,move /rom/dev /dev
+mount -o noatime,move /rom/overlay /overlay
