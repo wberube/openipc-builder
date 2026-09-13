@@ -1,0 +1,3 @@
+# Files to remove from the rootfs for the BeeWi BC7PW (gm8135s_lite).
+# Nothing board-specific yet: kernel is 3.3.0 and the GM8136 osdrv ships only
+# what this build uses. Add sensor/WiFi module paths here when trimming for 8M.
