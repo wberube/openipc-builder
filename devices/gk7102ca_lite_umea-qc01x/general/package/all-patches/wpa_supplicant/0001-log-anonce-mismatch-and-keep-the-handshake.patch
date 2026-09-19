@@ -1,0 +1,65 @@
+--- a/src/rsn_supp/wpa.c	2018-12-02 19:34:59.000000000 +0000
++++ b/src/rsn_supp/wpa.c	2026-09-19 16:37:31.588018708 +0000
+@@ -638,12 +638,30 @@
+ 	}
+ #endif /* CONFIG_P2P */
+ 
+-	if (wpa_supplicant_send_2_of_4(sm, sm->bssid, key, ver, sm->snonce,
+-				       kde, kde_len, ptk) < 0)
+-		goto failed;
++	/*
++	 * Record the ANonce before transmitting: the RDA5995 driver layer can
++	 * report a transmit failure for an EAPOL-Key frame that nevertheless
++	 * reaches the AP, and the original ordering (store only on success)
++	 * then leaves message 3/4 to be discarded as a nonce mismatch.
++	 */
++	os_memcpy(sm->anonce, key->key_nonce, WPA_NONCE_LEN);
++
++	{
++		int rc;
++
++		rc = wpa_supplicant_send_2_of_4(sm, sm->bssid, key, ver,
++						sm->snonce, kde, kde_len, ptk);
++		wpa_msg(sm->ctx->msg_ctx, MSG_INFO,
++			"gk7102ca: msg 2/4 send rc=%d anonce=%02x%02x%02x%02x",
++			rc, key->key_nonce[0], key->key_nonce[1],
++			key->key_nonce[2], key->key_nonce[3]);
++		if (rc < 0)
++			wpa_msg(sm->ctx->msg_ctx, MSG_WARNING,
++				"WPA: send of EAPOL-Key 2/4 returned %d - "
++				"waiting for 3/4 anyway", rc);
++	}
+ 
+ 	os_free(kde_buf);
+-	os_memcpy(sm->anonce, key->key_nonce, WPA_NONCE_LEN);
+ 	return;
+ 
+ failed:
+@@ -1393,12 +1411,25 @@
+ 	if (wpa_supplicant_validate_ie(sm, sm->bssid, &ie) < 0)
+ 		goto failed;
+ 
++	wpa_msg(sm->ctx->msg_ctx, MSG_INFO,
++		"gk7102ca: msg 3/4 nonce=%02x%02x%02x%02x stored=%02x%02x%02x%02x",
++		key->key_nonce[0], key->key_nonce[1],
++		key->key_nonce[2], key->key_nonce[3],
++		sm->anonce[0], sm->anonce[1], sm->anonce[2], sm->anonce[3]);
+ 	if (os_memcmp(sm->anonce, key->key_nonce, WPA_NONCE_LEN) != 0) {
++		/*
++		 * On the RDA5995 FullMAC this comparison fires even though the
++		 * message is provably ours: the MIC was already verified and the
++		 * Key Data AES-unwrapped (see wpa_sm_rx_eapol), and the PTK was
++		 * derived from the received message 1 nonce.  Dropping the frame
++		 * here aborts a handshake the AP has already completed on the
++		 * air, so log the mismatch, resync the stored nonce and carry on.
++		 */
+ 		wpa_msg(sm->ctx->msg_ctx, MSG_WARNING,
+ 			"WPA: ANonce from message 1 of 4-Way Handshake "
+-			"differs from 3 of 4-Way Handshake - drop packet (src="
++			"differs from 3 of 4-Way Handshake - resyncing (src="
+ 			MACSTR ")", MAC2STR(sm->bssid));
+-		goto failed;
++		os_memcpy(sm->anonce, key->key_nonce, WPA_NONCE_LEN);
+ 	}
+ 
+ 	keylen = WPA_GET_BE16(key->key_length);

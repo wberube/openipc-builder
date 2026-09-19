@@ -1,0 +1,69 @@
+#!/bin/sh
+#
+# ifup's udhcpc fires ~6 s before the RDA card associates (the firmware download
+# happens in netdev_open) and gives up; /usr/share/udhcpc/default.script then
+# applies a static fallback (ipaddr, else 192.168.1.10), so wlan0 merely LOOKS
+# configured. Keep asking for a real lease, and report the supplicant state,
+# since the UART here is read-only.
+#
+FALLBACK="$(fw_printenv -n ipaddr 2>/dev/null)"
+[ -n "$FALLBACK" ] || FALLBACK=192.168.1.10
+
+leased() {
+	ip -4 addr show dev wlan0 2>/dev/null | grep -q "inet ${FALLBACK}/" && return 1
+	ip -4 addr show dev wlan0 2>/dev/null | grep -q 'inet ' && return 0
+	return 1
+}
+
+# The driver's cfg80211 entry points log loudly to dmesg, but its entire data
+# path ([RDAWLAN_DATA]/[RDAWLAN_RX]/[RDAWLAN_WEXT]) is silent by default, so the
+# netdev counters are the only evidence of whether a data frame ever left the
+# chip.  Every udhcpc round below is a batch of known data frames.
+counters() {
+	printf '  rx_packets=%s rx_bytes=%s\n' \
+		"$(cat /sys/class/net/wlan0/statistics/rx_packets 2>/dev/null)" \
+		"$(cat /sys/class/net/wlan0/statistics/rx_bytes 2>/dev/null)"
+	printf '  tx_packets=%s tx_bytes=%s\n' \
+		"$(cat /sys/class/net/wlan0/statistics/tx_packets 2>/dev/null)" \
+		"$(cat /sys/class/net/wlan0/statistics/tx_bytes 2>/dev/null)"
+	printf '  tx_errors=%s tx_dropped=%s tx_aborted=%s tx_carrier=%s\n' \
+		"$(cat /sys/class/net/wlan0/statistics/tx_errors 2>/dev/null)" \
+		"$(cat /sys/class/net/wlan0/statistics/tx_dropped 2>/dev/null)" \
+		"$(cat /sys/class/net/wlan0/statistics/tx_aborted_errors 2>/dev/null)" \
+		"$(cat /sys/class/net/wlan0/statistics/tx_carrier_errors 2>/dev/null)"
+}
+
+case "$1" in
+start)
+	[ -e /sys/class/net/wlan0 ] || exit 0
+	(
+		echo "=== wifi: counters after boot-time attempts ==="
+		counters
+		n=0
+		while [ $n -lt 6 ]; do
+			leased && break
+			udhcpc -i wlan0 -t 3 -T 3 -q -n >/dev/null 2>&1
+			leased && break
+			n=$((n+1))
+			echo "=== wifi: round ${n}: $(wpa_cli -p /tmp/wpa_supplicant -i wlan0 status 2>/dev/null | tr '\n' ' ')"
+			sleep 5
+		done
+		echo "=== wifi: wlan0 after ${n} dhcp rounds (fallback ${FALLBACK}) ==="
+		ip -4 addr show dev wlan0 2>/dev/null
+		ip -4 route show dev wlan0 2>/dev/null
+		echo "=== wifi: netdev counters (compare with the block above) ==="
+		counters
+		cat /proc/net/dev 2>/dev/null
+		ip -s link show dev wlan0 2>/dev/null
+		echo "=== wifi: supplicant state ==="
+		wpa_cli -p /tmp/wpa_supplicant -i wlan0 status 2>/dev/null
+		wpa_cli -p /tmp/wpa_supplicant -i wlan0 scan_results 2>/dev/null | head -8
+		echo "=== wifi: driver's own (wext) view of the link ==="
+		/sbin/iwconfig wlan0 2>&1 | head -10
+		echo "=== wifi: wireless stats ==="
+		cat /proc/net/wireless 2>/dev/null
+		echo "=== wifi: end ==="
+	) &
+	;;
+esac
+exit 0
