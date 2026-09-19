@@ -1,0 +1,42 @@
+config BR2_PACKAGE_WPA_SUPPLICANT_OPENIPC
+	bool "wpa_supplicant-openipc"
+	depends on BR2_USE_MMU # fork()
+	depends on BR2_TOOLCHAIN_HAS_THREADS # libnl
+	depends on !BR2_PACKAGE_WPA_SUPPLICANT
+	select BR2_PACKAGE_LIBNL
+	help
+	  wpa_supplicant 2.7 for the camera as a Wi-Fi station: WPA2-PSK over
+	  nl80211, control interface, internal crypto backend.  No EAP, no
+	  AP/P2P/mesh, no WPS/DPP/SAE: a fixed camera on a home network.
+
+	  2.7 is the version that completes the 4-way handshake with this
+	  board's Wi-Fi chip, the RDA5995 USB FullMAC (rdawfmac).  With newer
+	  wpa_supplicant the association still succeeds but the AP rejects
+	  every message 2/4: it retransmits message 1 with an unchanged ANonce
+	  four times, then the driver's SME drops the link, which the
+	  supplicant reports as "4-Way Handshake failed - pre-shared key may
+	  be incorrect" (reason=WRONG_KEY) a few seconds after associating.
+	  What differs is the address pair the PTK is derived from: in the
+	  failing log it is A1=24:b7:2a:01:f5:21 A2=4c:22:f3:74:23:9d, i.e.
+	  neither is the real pair (AP 4c:22:f3:74:23:9d, station
+	  24:b7:2a:75:f5:21), while the driver's own connect notification
+	  reports a zeroed AP address (e->addr:00:00:00:00:00:00) that the
+	  newer supplicant picks up and 2.7 does not.
+
+	  The pin lives here, in the device directory, because builder.sh does
+	  "rm -rf openipc" and re-clones the firmware tree on every run: a
+	  version change made inside that tree is silently reverted with it.
+
+	  https://w1.fi/wpa_supplicant/ (source: https://w1.fi/releases/)
+
+if BR2_PACKAGE_WPA_SUPPLICANT_OPENIPC
+
+config BR2_PACKAGE_WPA_SUPPLICANT_OPENIPC_CLI
+	bool "Install wpa_cli binary"
+	default y
+
+config BR2_PACKAGE_WPA_SUPPLICANT_OPENIPC_PASSPHRASE
+	bool "Install wpa_passphrase binary"
+	default y
+
+endif
