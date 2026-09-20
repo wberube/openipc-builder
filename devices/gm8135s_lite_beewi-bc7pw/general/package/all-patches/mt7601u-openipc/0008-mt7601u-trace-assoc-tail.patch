@@ -1,0 +1,100 @@
+From: BeeWi BC7PW bring-up <noreply@example.invalid>
+Subject: [PATCH] mt7601sta: instrument the association tail to find the writer
+
+Temporary diagnostic instrumentation, to be removed once the writer is known.
+The MLME task dies with a wild PC and a clobbered stack slot just after the
+association response is processed. That has now survived: the HT path removed
+(verified active on hardware - cfg_mode=4, no HT dump, iwconfig G(4), stainfo
+OFDM/54, fault byte-identical), the cfg80211 CONNECT_RESULT_INFORM enqueue
+removed, and the RSN/key-index bounds fixed. So the corruptor is in code common
+to both runs, in the tail after AssocPostProc() returns.
+
+Each marker prints four guard words from this frame; the last marker printed
+localises the fault to one call:
+  1-alloc          after the ie_list allocation
+  2-assocpostproc  after AssocPostProc()
+  3-addmactable    after StaAddMacTableEntry()  (MacTabLock, set_entry_phy_cfg,
+                                                 hash insertion, MlmeRAInit,
+                                                 MlmeSelectTxRateTable)
+  4-setmcs         after RTMPSetSupportMCS()
+  5-mlmeenqueue    after MlmeEnqueue(MT2_ASSOC_CONF)
+  9-exit           before the frame is freed
+
+GUARD SMASHED = a write landed on this frame; ok = it did not.
+--- a/sta/assoc.c
++++ b/sta/assoc.c
+@@ -1131,6 +1131,21 @@
+ 
+ 	==========================================================================
+  */
++
++/* BeeWi BC7PW bring-up instrumentation (temporary; see NOTES.md).
++ * BC_TRAP prints four guard words that live in this frame, at each step of the
++ * association tail. If the write lands on this frame the guard changes and the
++ * marker after that call shows it; if the guard survives and the fault still
++ * comes, the write is landing elsewhere in the task stack. */
++#define BC_GUARD_INIT() \
++    volatile ULONG bc_guard[4] = {0x11111111UL, 0x22222222UL, 0x33333333UL, 0x44444444UL}
++#define BC_TRAP(_tag) do { \
++    ULONG g0 = bc_guard[0], g1 = bc_guard[1], g2 = bc_guard[2], g3 = bc_guard[3]; \
++    if (g0 != 0x11111111UL || g1 != 0x22222222UL || g2 != 0x33333333UL || g3 != 0x44444444UL) \
++    printk(KERN_ERR "BCTRAP %s: GUARD SMASHED %08lx %08lx %08lx %08lx\n", _tag, g0, g1, g2, g3); \
++    else \
++    printk(KERN_ERR "BCTRAP %s: ok %08lx %08lx %08lx %08lx\n", _tag, g0, g1, g2, g3); \
++} while (0)
+ VOID PeerAssocRspAction(
+ 	IN PRTMP_ADAPTER pAd,
+ 	IN MLME_QUEUE_ELEM *Elem)
+@@ -1150,6 +1165,7 @@
+ 	EXT_CAP_INFO_ELEMENT ExtCapInfo;
+ 	MAC_TABLE_ENTRY *pEntry;
+ 	IE_LISTS *ie_list = NULL;
++    BC_GUARD_INIT();
+ 
+ 
+ 	os_alloc_mem(pAd, (UCHAR **)&ie_list, sizeof(IE_LISTS));
+@@ -1158,6 +1174,7 @@
+ 		return;
+ 	}
+ 	NdisZeroMemory((UCHAR *)ie_list, sizeof(IE_LISTS));
++    BC_TRAP("1-alloc");
+ 
+ 	if (PeerAssocRspSanity(pAd, Elem->Msg, Elem->MsgLen,
+ 			       Addr2, &CapabilityInfo, &Status, &Aid, SupRate,
+@@ -1205,6 +1222,7 @@
+ 						ie_list,
+ 					      &HtCapability, HtCapabilityLen,
+ 					      &AddHtInfo);
++    BC_TRAP("2-assocpostproc");
+ 
+ 				StaAddMacTableEntry(pAd,
+ 						    &pAd->MacTab.Content[BSSID_WCID],
+@@ -1214,6 +1232,7 @@
+ 						    AddHtInfoLen,
+ 							ie_list,
+ 						    CapabilityInfo);
++    BC_TRAP("3-addmactable");
+ 
+ 				RTMPSetSupportMCS(pAd,
+ 								OPMODE_STA,
+@@ -1228,10 +1247,12 @@
+ #endif /* DOT11_VHT_AC */
+ 								&HtCapability,
+ 								HtCapabilityLen);
++    BC_TRAP("4-setmcs");
+ 
+ 			}
+ 			pAd->Mlme.AssocMachine.CurrState = ASSOC_IDLE;
+ 			MlmeEnqueue(pAd, MLME_CNTL_STATE_MACHINE, MT2_ASSOC_CONF, 2, &Status, 0);
++    BC_TRAP("5-mlmeenqueue");
+ 
+ #ifdef LINUX
+ //yiwei cfg
+@@ -1260,6 +1281,7 @@
+ 		DBGPRINT(RT_DEBUG_TRACE, ("ASSOC - %s() sanity check fail\n", __FUNCTION__));
+ 	}
+ 
++    BC_TRAP("9-exit");
+ 	if (ie_list != NULL)
+ 		os_free_mem(NULL, ie_list);
+ }

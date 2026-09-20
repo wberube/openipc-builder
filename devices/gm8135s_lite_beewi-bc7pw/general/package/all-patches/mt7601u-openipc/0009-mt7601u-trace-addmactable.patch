@@ -1,0 +1,102 @@
+From: BeeWi BC7PW bring-up <noreply@example.invalid>
+Subject: [PATCH] mt7601sta: instrument StaAddMacTableEntry()
+
+Second instrumentation level, temporary. Level one (0008) localised the fault to
+StaAddMacTableEntry(): the marker after AssocPostProc() printed, the one after
+StaAddMacTableEntry() never did, and no GUARD SMASHED was seen. The last output
+before the fault is the HT debug dump at the end of the if (bSupportN) block, and
+the 11g run - where that block is skipped - faulted in the same place. So the
+writer is in the code after that block, common to both runs.
+
+Markers bracket each step, so the last one printed names the call:
+  A1-entry      after the early sanity checks
+  A2-lock       after NdisAcquireSpinLock(&pAd->MacTabLock)
+  A3-phycfg     after set_entry_phy_cfg()
+  A4-htblock    after assoc_ht_info_debugshow()
+  A5-raint      after MlmeRAInit()
+  A6-basetable  after MlmeSelectTxRateTable()
+  A7-hash       after the MacTab hash insertion
+  A8-unlock     after NdisReleaseSpinLock()
+  A9-wext       after wext_notify_event_assoc()
+
+Rate-control init is the prime suspect: MlmeRAInit/MlmeSelectTxRateTable run here
+in both runs, and the earlier canary work planted its victim in
+MlmeDynamicTxRateSwitching(), the periodic rate-adaptation function. A9 exists
+because an archived experiment once blamed wext_notify_event_assoc()'s frame.
+--- a/sta/assoc.c
++++ b/sta/assoc.c
+@@ -1835,6 +1835,7 @@
+ {
+ 	UCHAR MaxSupportedRate = RATE_11;
+ 	BOOLEAN bSupportN = FALSE;
++    BC_GUARD_INIT();
+ #ifdef TXBF_SUPPORT
+ 	BOOLEAN		supportsETxBf = FALSE;
+ #endif
+@@ -1846,6 +1847,7 @@
+ 		CLIENT_STATUS_CLEAR_FLAG(pEntry, fCLIENT_STATUS_WMM_CAPABLE);
+ 
+ 	MaxSupportedRate = dot11_2_ra_rate(MaxSupportedRateIn500Kbps);
++    BC_TRAP("A1-entry");
+ 
+ 	if (WMODE_EQUAL(pAd->CommonCfg.PhyMode, WMODE_G)
+ 	    && (MaxSupportedRate < RATE_FIRST_OFDM_RATE))
+@@ -1859,6 +1861,7 @@
+ #endif /* DOT11_N_SUPPORT */
+ 
+ 	NdisAcquireSpinLock(&pAd->MacTabLock);
++    BC_TRAP("A2-lock");
+ 	if (pEntry) {
+ 		NdisZeroMemory(pEntry->R_Counter, sizeof(pEntry->R_Counter));
+ 		pEntry->PortSecured = WPA_802_1X_PORT_SECURED;
+@@ -1876,6 +1879,7 @@
+ 		pEntry->MaxSupportedRate = MaxSupportedRate;
+ 
+ 		set_entry_phy_cfg(pAd, pEntry);
++    BC_TRAP("A3-phycfg");
+ 
+ 		pEntry->CapabilityInfo = CapabilityInfo;
+ 		pEntry->isCached = FALSE;
+@@ -1950,6 +1954,7 @@
+ 		NdisMoveMemory(&pEntry->HTCapability, pHtCapability, HtCapabilityLen);
+ 
+ 		assoc_ht_info_debugshow(pAd, pEntry, HtCapabilityLen, pHtCapability);
++    BC_TRAP("A4-htblock");
+ #ifdef DOT11_VHT_AC
+ 		if (WMODE_CAP_AC(pAd->CommonCfg.PhyMode) &&
+ 			ie_list->vht_cap_len && ie_list->vht_op_len)
+@@ -1993,12 +1998,14 @@
+ #endif /* TXBF_SUPPORT */
+ 
+ 	MlmeRAInit(pAd, pEntry);
++    BC_TRAP("A5-raint");
+ 
+ 	/* Set asic auto fall back */
+ 	if (pAd->StaCfg.bAutoTxRateSwitch == TRUE) {
+ 		UCHAR TableSize = 0;
+ 
+ 		MlmeSelectTxRateTable(pAd, pEntry, &pEntry->pTable, &TableSize, &pEntry->CurrTxRateIndex);
++    BC_TRAP("A6-basetable");
+ 		pEntry->bAutoTxRateSwitch = TRUE;
+ 	} else {
+ 		pEntry->HTPhyMode.field.MODE = pAd->StaCfg.HTPhyMode.field.MODE;
+@@ -2051,9 +2058,11 @@
+ 		pEntry->pAd = pAd;
+ 		SET_ENTRY_CLIENT(pEntry);
+ 		pAd->MacTab.Size ++;
++    BC_TRAP("A7-hash");
+ 	}
+ 
+ 	NdisReleaseSpinLock(&pAd->MacTabLock);
++    BC_TRAP("A8-unlock");
+ 
+ #ifdef WPA_SUPPLICANT_SUPPORT
+ #ifndef NATIVE_WPA_SUPPLICANT_SUPPORT
+@@ -2073,6 +2082,7 @@
+ /*        union iwreq_data    wrqu; */
+ 		wext_notify_event_assoc(pAd->net_dev, pAd->StaCfg.ReqVarIEs,
+ 					pAd->StaCfg.ReqVarIELen);
++    BC_TRAP("A9-wext");
+ 
+ 
+ 		RtmpOSWrielessEventSend(pAd->net_dev, RT_WLAN_EVENT_CGIWAP, -1,

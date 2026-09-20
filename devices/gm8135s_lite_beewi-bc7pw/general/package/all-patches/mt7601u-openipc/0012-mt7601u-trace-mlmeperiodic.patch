@@ -1,0 +1,48 @@
+From: BeeWi BC7PW bring-up <noreply@example.invalid>
+Subject: [PATCH] mt7601sta: mark the rate-switching region of MlmePeriodicExec()
+
+Fourth instrumentation level, temporary. With 0011 applied the association-time
+crash is gone and association now completes, but the maintenance timer dies a
+moment later: PC is at MlmePeriodicExec+0x1d0, r4 (a pointer) holds 0x07060504
+-- the bytes 04 05 06 07, MCS-index data -- and the faulting instruction is
+ldrb r3, [r4, #0x290]. So r4 is being loaded out of an MCS index list.
+
+The faulting PC resolves inside MlmePeriodicExec itself, not in the callee, so
+these markers bracket what the 1 Hz timer runs and localise it to the region
+between two of them:
+  PEXEC 0-enter                  on entry (after the opening brace)
+  PEXEC 1/2-before/after-apdrs   around APMlmeDynamicTxRateSwitching()
+  PEXEC 3/4-before/after-drs     around MlmeDynamicTxRateSwitching()
+
+Note the AP/P2P code is compiled in for this target, so the AP-side rate
+switching runs too and is a live suspect alongside the STA side.
+--- a/common/mlme.c
++++ b/common/mlme.c
+@@ -851,6 +851,7 @@
+ 	IN PVOID SystemSpecific2, 
+ 	IN PVOID SystemSpecific3) 
+ {
++	printk(KERN_ERR "PEXEC 0-enter\n");
+ 	ULONG			TxTotalCnt;
+ 	PRTMP_ADAPTER	pAd = (RTMP_ADAPTER *)FunctionContext;
+ #ifdef ANT_DIVERSITY_SUPPORT
+@@ -976,7 +977,9 @@
+ 	{
+ #ifdef CONFIG_AP_SUPPORT
+ 		IF_DEV_CONFIG_OPMODE_ON_AP(pAd)
++	printk(KERN_ERR "PEXEC 1-before-apdrs\n");
+ 			APMlmeDynamicTxRateSwitching(pAd);
++	printk(KERN_ERR "PEXEC 2-after-apdrs\n");
+ #endif /* CONFIG_AP_SUPPORT */
+ #ifdef CONFIG_STA_SUPPORT
+ 		/* perform dynamic tx rate switching based on past TX history*/
+@@ -991,7 +994,9 @@
+ #endif
+ 					)
+ 				&& (!OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_DOZE)))
++	printk(KERN_ERR "PEXEC 3-before-drs\n");
+ 				MlmeDynamicTxRateSwitching(pAd);
++	printk(KERN_ERR "PEXEC 4-after-drs\n");
+ 		}
+ #endif /* CONFIG_STA_SUPPORT */
+ 	}

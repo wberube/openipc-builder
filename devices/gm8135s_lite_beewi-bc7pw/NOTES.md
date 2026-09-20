@@ -459,17 +459,58 @@ the corpse: the MLME task is dead so nothing drains its RX queue, and it prints 
 `RT_DEBUG_INFO`/`TRACE`, so it appears because `Debug=3` is set and would be
 silent otherwise.
 
-Two changes were tried against it:
+What has been tried against it, and what that settled:
 
 * `0003-assoc-bound-rsn-ie-copy.patch` (moved out of `debug-archive/`) bounds the
   three `NdisMoveMemory` copies in `AssocPostProc` — `pEid->Len + 2` is
   peer-controlled and lands in a `MAX_LEN_OF_RSNIE` (255) field. Latent with this
   AP (its RSN IE is 22 bytes) but it is on the exact path that dies.
-* **Forcing 11g — ruled out.** Taking HT out of association and the 1-second rate
-  updates (`WirelessMode=4`, i.e. `PHY_11G`/`WMODE_G`, which makes `WMODE_CAP_N()`
-  false so the entry is never upgraded to HT) does **not** clear the fault: the
-  task still dies at association with the same signature. The crash is therefore
-  not specific to the HT/MCS path, and no version of this patch belongs in the tree.
+* **The cfg80211 association enqueue — exonerated on hardware.** A patch removing
+  the `RTEnqueueInternalCmd(CMDTHREAD_CONNECT_RESULT_INFORM, …)` call from
+  `PeerAssocRspAction()` (the last thing the MLME task does before the fault) was
+  built and booted. The fault came back byte-identical — same `PC 0x98128c08`, same
+  `LR __schedule+0x300`, same registers (`r4=45540900 r5=3753554c r6=01393233
+  r7=000bcf6a`), same stack residue, and the module did load (`1627486` in
+  `/proc/modules`). So the cfg80211 glue on that path is not the corruptor, and the
+  patch was retired (the resulting module is byte-identical to the build without it).
+* **Forcing 11g — re-test in progress; the earlier conclusion is not reproducible.**
+  `WirelessMode=4` (`PHY_11G`/`WMODE_G`) makes `WMODE_CAP_N()` false, so the STA
+  sends no HT capability, the driver parses no HT information from the response, the
+  entry is never upgraded to HT and the per-second rate update stays legacy. An
+  earlier session concluded this does not clear the fault, but no log supports that
+  conclusion: **every boot on record** reports `cfg_mode=9`, `1. Phy Mode = 14` and
+  `iwconfig` `B/G/gN(14)` — HT still active — and the last output before every fault
+  is the peer's HT dump. `0006-mt7601u-force-11g.patch` is therefore back in the tree
+  for a controlled re-test, and a run only counts as a test of this if the log shows
+  **`cfg_mode=4`, no `Peer - 11n HT Info` block, and `iwconfig` `B/G(4)`**. The
+  stale-patch trap above is exactly how such a build can look applied when it is not.
+* One candidate checked and cleared: `PeerAssocRspSanity()` copies a fixed
+  `SIZE_HT_CAP_IE` (26) bytes into `pHtCapability` guarded only by `pEid->Len` — a
+  stack-overflow shape, and the write is into the MLME task's own frame. But the
+  packed `HT_CAPABILITY_IE` is `HtCapInfo(2) + HtCapParm(1) + MCSSet(16) +
+  ExtHtCapInfo(2) + TxBFCap(4) + ASCap(1) = 26`, i.e. exactly `SIZE_HT_CAP_IE`, so it
+  is struct-sized, not an overflow. (`IE_ADD_HT` uses `sizeof()` regardless.)
+
+### Separately: the vendor modules can now panic the boot
+
+On the `#30` kernel the boot reached the WIFI DIAG block and then died in the vendor
+module load:
+
+```
+insmod: page allocation failure: order:3, mode:0x20
+[ms]ms_zalloc:66: kmalloc fail. size(32768)
+Damnit from (ms_zalloc+0x9c/0x194 [ms])   <- from gs_driver_init
+Kernel panic - not syncing: Error allocate proc buf
+```
+
+`Mem-info` reported `Normal free:1584kB` against `min:1016kB`: the board is 64 MB with
+34 MB reserved for gmmem, and a 32 KB *contiguous* allocation no longer exists. The
+previous boot hit the same class of failure (`order:5` in `vpd`) and survived, so this
+is fragmentation-dependent rather than deterministic, and it is unrelated to the MLME
+fault — but it means a wedged boot may now end in a reboot instead of a shell.
+When that happens the log is still usable: the `cfg_mode=` line at driver load, and
+the HT dump (or its absence) at association, both appear long before the panic.
+
 
 ### The dumps contain no OEM MT7601 driver
 

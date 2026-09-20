@@ -1,0 +1,49 @@
+From: BeeWi BC7PW bring-up <noreply@example.invalid>
+Subject: [PATCH] mt7601sta: build without the cfg80211 shim, keep the wlan0 name
+
+The driver's cfg80211 support is a shim written for a different kernel: it is
+compiled in but does not deliver scan results, which is why this board drives
+the driver over WEXT instead. It is not needed here, and it is on the exact
+path that dies -- PeerAssocRspAction() uses RT_CFG80211_SUPPORT to enqueue
+CMDTHREAD_CONNECT_RESULT_INFORM into the internal command queue, and the last
+thing the MLME task does before the fault is process an association response.
+
+Build the module without the shim so that path does not exist. Dropping
+RT_CFG80211_SUPPORT also flips INF_MAIN_DEV_NAME to "ra", so pin both main and
+MBSSID device names to "wlan": the board overlay, the interface stanza and the
+firmware's S40network all expect wlan0.
+
+WEXT stays the control path (-DWPA_SUPPLICANT_SUPPORT
+-DNATIVE_WPA_SUPPLICANT_SUPPORT are untouched), so wpa_supplicant -D wext keeps
+working unchanged.
+
+--- a/Makefile
++++ b/Makefile
+@@ -136,7 +136,7 @@
+ mt7601sta-objs += os/linux/ap_ioctl.o
+ 
+ EXTRA_CFLAGS += -DAGGREGATION_SUPPORT -DPIGGYBACK_SUPPORT -DWMM_SUPPORT -DLINUX -DSYSTEM_LOG_SUPPORT -DRESOURCE_PRE_ALLOC -DCONFIG_STA_SUPPORT -DSCAN_SUPPORT -DADHOC_WPA2PSK_SUPPORT -DWPA_SUPPLICANT_SUPPORT -DNATIVE_WPA_SUPPLICANT_SUPPORT -DWSC_STA_SUPPORT -DWSC_V2_SUPPORT -DRALINK_ATE -DCONFIG_RT2880_ATE_CMD_NEW -DRALINK_QA -DDOT11_N_SUPPORT -DSTATS_COUNT_SUPPORT -DRELEASE_EXCLUDE -DLED_CONTROL_SUPPORT -DMT7601U -DMT7601 -DRLT_MAC -DRLT_RF -DRTMP_MAC_USB -DRTMP_USB_SUPPORT -DRTMP_TIMER_TASK_SUPPORT -DRX_DMA_SCATTER -DVCORECAL_SUPPORT -DRTMP_EFUSE_SUPPORT -DNEW_MBSSID_MODE -DRTMP_INTERNAL_TX_ALC -DCONFIG_ANDES_SUPPORT -DCONFIG_RX_CSO_SUPPORT -DRTMP_FREQ_CALIBRATION_SUPPORT
+-EXTRA_CFLAGS += -DDYNAMIC_PD_SUPPORT -DUSB_BULK_BUF_PREALLOC -DRT_CFG80211_SUPPORT -DEXT_BUILD_CHANNEL_LIST
++EXTRA_CFLAGS += -DDYNAMIC_PD_SUPPORT -DUSB_BULK_BUF_PREALLOC -DEXT_BUILD_CHANNEL_LIST
+ EXTRA_CFLAGS += -DUSB_BULK_BUF_ALIGMENT -DALIGMENT_BULKAGGRE_SIZE=3 -DBUF_ALIGMENT_RINGSIZE=2
+ EXTRA_CFLAGS += -DDBG
+ EXTRA_CFLAGS += -DP2P_SUPPORT -DAPCLI_SUPPORT -DMAT_SUPPORT -DAP_SCAN_SUPPORT -DSCAN_SUPPORT -DP2P_APCLI_SUPPORT -DCONFIG_AP_SUPPORT -DUAPSD_SUPPORT -DMBSS_SUPPORT -DIAPP_SUPPORT -DDOT1X_SUPPORT -DWSC_AP_SUPPORT -DWSC_STA_SUPPORT
+--- a/include/rtmp_def.h
++++ b/include/rtmp_def.h
+@@ -1754,13 +1754,11 @@
+ #define IS_OPMODE_AP(_x)		((_x)->OpMode == OPMODE_AP)
+ #define IS_OPMODE_STA(_x)		((_x)->OpMode == OPMODE_STA)
+ 
+-#if defined(ANDROID_SUPPORT) || defined(RT_CFG80211_SUPPORT)
++/* This board builds without the cfg80211 shim but its userspace still
++ * expects wlan0, so the name can no longer be derived from
++ * RT_CFG80211_SUPPORT. */
+ #define INF_MAIN_DEV_NAME		"wlan"
+ #define INF_MBSSID_DEV_NAME		"wlan"
+-#else
+-#define INF_MAIN_DEV_NAME		"ra"
+-#define INF_MBSSID_DEV_NAME		"ra"
+-#endif /* ANDROID_SUPPORT */
+ #define INF_WDS_DEV_NAME		"wds"
+ #define INF_APCLI_DEV_NAME		"apcli"
+ #define INF_MESH_DEV_NAME		"mesh"

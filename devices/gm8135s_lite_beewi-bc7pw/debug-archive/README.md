@@ -60,3 +60,22 @@ make BOARD=gm8135s_lite_beewi-bc7pw
 Confirm it took: the built `mt7601sta.ko` should reference `__stack_chk_fail`
 (only when the diagnostics are in) and
 `openipc/output/build/linux-custom/.config` should show the fragment's options.
+
+## Parked: building without the cfg80211 shim (`0007`)
+
+`0007-mt7601u-disable-cfg80211-shim.patch` drops `-DRT_CFG80211_SUPPORT` and
+pins `INF_MAIN_DEV_NAME` to `"wlan"`, to take the shim out of the association
+path — its `RTEnqueueInternalCmd(CMDTHREAD_CONNECT_RESULT_INFORM, …)` in
+`PeerAssocRspAction()` is the last thing the MLME task does before the fault.
+
+**It does not build.** The driver assumes the shim exists well outside its
+`#ifdef RT_CFG80211_SUPPORT` blocks: `pAd->cfg80211_ctrl` (40 refs / 12 files),
+`RTMP_CFG80211_VIF_P2P_GO_ON` (27 refs / 13 files) and `RT_CMD_80211_IFTYPE_`
+(98 refs / 16 files) are reached from paths gated only on `CONFIG_AP_SUPPORT` or
+`P2P_SUPPORT`; the first failure is `os/linux/rt_profile.c:791`. Removing the
+shim is therefore a multi-site guard port, not a build flag, and the same
+unguarded-reference pattern is why dropping `-DP2P_SUPPORT`/`-DAPCLI_SUPPORT`
+fails too.
+
+Restore by copying it back into `general/package/all-patches/mt7601u-openipc/`
+once those references are guarded.
