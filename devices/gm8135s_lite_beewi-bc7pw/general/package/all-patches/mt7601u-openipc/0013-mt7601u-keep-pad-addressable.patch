@@ -1,0 +1,18 @@
+From: BeeWi BC7PW bring-up <noreply@example.invalid>
+Subject: [PATCH] mt7601sta: keep pAd addressable in MlmePeriodicExec()
+--- a/common/mlme.c
++++ b/common/mlme.c
+@@ -991,6 +991,13 @@
+ #endif
+ 					)
+ 				&& (!OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_DOZE)))
++	/* Force pAd to an addressable memory slot rather than leaving it live only in
++	 * a register. Taking the address of pAd in the diagnostic build is the only
++	 * change that stopped MlmeDynamicTxRateSwitching() being entered with a
++	 * garbage pAd (0x07060504) and faulting at +0x14; with it, pAd reads
++	 * 84aa7000 at every step and the timer survives the whole boot. Workaround
++	 * for a fault whose mechanism is still unproven, not a root-cause fix. */
++	(void)&pAd;
+ 				MlmeDynamicTxRateSwitching(pAd);
+ 		}
+ #endif /* CONFIG_STA_SUPPORT */
