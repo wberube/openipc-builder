@@ -1,31 +1,30 @@
 From: BeeWi BC7PW bring-up <noreply@example.invalid>
-Subject: [PATCH] mt7601sta: print pAd at each rate-switch step of MlmePeriodicExec()
+Subject: [PATCH] mt7601sta: dump the words around pAd at each rate-switch step
 
-Temporary diagnostic, revised. The previous revision bracketed the two
-rate-switching calls by text alone, and one of the two markers never appeared in
-any log -- impossible for an adjacent pair -- so the ordering could not be
-trusted. These four print the adapter pointer itself, which answers the question
-that matters: MlmeDynamicTxRateSwitching() is called with a corrupted pAd
-(r0 = 0x07060504, MCS-index bytes) and dies on its first dereference, so we need
-to know *when* the caller's pAd goes bad.
+Temporary diagnostic. Timing is already settled: pAd reads 84aa7000 at
+2-after-apdrs and 07060504 at 3-before-drs in the same tick, with only the AP/STA
+if-else between the markers -- so the corruption is an out-of-band write into the
+timer task's stack, not a write by that code.
 
-  PEXEC 1/2-before/after-apdrs   around APMlmeDynamicTxRateSwitching()
-  PEXEC 3/4-before/after-drs     around MlmeDynamicTxRateSwitching()
+Rather than plant a guard (which needs to be declared next to pAd, and that
+declaration is not where the pattern expected it), take the address of pAd at each
+marker and print the eight words spanning both sides of it. Taking the address also
+forces pAd into a memory slot, so the slot being watched is the real one.
 
-Read it as: pAd bad at 3-before-drs means the AP-side call just corrupted it;
-valid at 3 but bad at 1 means an earlier pass did; bad at 1 already means the
-previous tick left the damage. The old entry marker is dropped -- it needed a
-brace-relative anchor, and a previous generator slip put a statement into the
-parameter list that way.
+Comparing 2-after-apdrs with 3-before-drs gives, directly, which of those words
+changed and by how much offset from &pAd -- i.e. the direction and reach of the
+offending store, which is what bounds the buffer behind it. If none of them change
+while the pAd value does, the store is aimed at that exact slot and the culprit is
+a stale pointer rather than an adjacent-buffer overflow.
 --- a/common/mlme.c
 +++ b/common/mlme.c
 @@ -976,7 +976,9 @@
  	{
  #ifdef CONFIG_AP_SUPPORT
  		IF_DEV_CONFIG_OPMODE_ON_AP(pAd)
-+	printk(KERN_ERR "PEXEC 1-before-apdrs pAd=%p\n", pAd);
++	printk(KERN_ERR "PEXEC 1-before-apdrs pAd=%p &pAd=%p w=%08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx\n", pAd, &pAd, ((ULONG *)&pAd)[-2], ((ULONG *)&pAd)[-1], ((ULONG *)&pAd)[1], ((ULONG *)&pAd)[2], ((ULONG *)&pAd)[3], ((ULONG *)&pAd)[4], ((ULONG *)&pAd)[5], ((ULONG *)&pAd)[6]);
  			APMlmeDynamicTxRateSwitching(pAd);
-+	printk(KERN_ERR "PEXEC 2-after-apdrs pAd=%p\n", pAd);
++	printk(KERN_ERR "PEXEC 2-after-apdrs pAd=%p &pAd=%p w=%08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx\n", pAd, &pAd, ((ULONG *)&pAd)[-2], ((ULONG *)&pAd)[-1], ((ULONG *)&pAd)[1], ((ULONG *)&pAd)[2], ((ULONG *)&pAd)[3], ((ULONG *)&pAd)[4], ((ULONG *)&pAd)[5], ((ULONG *)&pAd)[6]);
  #endif /* CONFIG_AP_SUPPORT */
  #ifdef CONFIG_STA_SUPPORT
  		/* perform dynamic tx rate switching based on past TX history*/
@@ -33,9 +32,9 @@ parameter list that way.
  #endif
  					)
  				&& (!OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_DOZE)))
-+	printk(KERN_ERR "PEXEC 3-before-drs pAd=%p\n", pAd);
++	printk(KERN_ERR "PEXEC 3-before-drs pAd=%p &pAd=%p w=%08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx\n", pAd, &pAd, ((ULONG *)&pAd)[-2], ((ULONG *)&pAd)[-1], ((ULONG *)&pAd)[1], ((ULONG *)&pAd)[2], ((ULONG *)&pAd)[3], ((ULONG *)&pAd)[4], ((ULONG *)&pAd)[5], ((ULONG *)&pAd)[6]);
  				MlmeDynamicTxRateSwitching(pAd);
-+	printk(KERN_ERR "PEXEC 4-after-drs pAd=%p\n", pAd);
++	printk(KERN_ERR "PEXEC 4-after-drs pAd=%p &pAd=%p w=%08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx\n", pAd, &pAd, ((ULONG *)&pAd)[-2], ((ULONG *)&pAd)[-1], ((ULONG *)&pAd)[1], ((ULONG *)&pAd)[2], ((ULONG *)&pAd)[3], ((ULONG *)&pAd)[4], ((ULONG *)&pAd)[5], ((ULONG *)&pAd)[6]);
  		}
  #endif /* CONFIG_STA_SUPPORT */
  	}
