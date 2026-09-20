@@ -1,48 +1,41 @@
 From: BeeWi BC7PW bring-up <noreply@example.invalid>
-Subject: [PATCH] mt7601sta: mark the rate-switching region of MlmePeriodicExec()
+Subject: [PATCH] mt7601sta: print pAd at each rate-switch step of MlmePeriodicExec()
 
-Fourth instrumentation level, temporary. With 0011 applied the association-time
-crash is gone and association now completes, but the maintenance timer dies a
-moment later: PC is at MlmePeriodicExec+0x1d0, r4 (a pointer) holds 0x07060504
--- the bytes 04 05 06 07, MCS-index data -- and the faulting instruction is
-ldrb r3, [r4, #0x290]. So r4 is being loaded out of an MCS index list.
+Temporary diagnostic, revised. The previous revision bracketed the two
+rate-switching calls by text alone, and one of the two markers never appeared in
+any log -- impossible for an adjacent pair -- so the ordering could not be
+trusted. These four print the adapter pointer itself, which answers the question
+that matters: MlmeDynamicTxRateSwitching() is called with a corrupted pAd
+(r0 = 0x07060504, MCS-index bytes) and dies on its first dereference, so we need
+to know *when* the caller's pAd goes bad.
 
-The faulting PC resolves inside MlmePeriodicExec itself, not in the callee, so
-these markers bracket what the 1 Hz timer runs and localise it to the region
-between two of them:
-  PEXEC 0-enter                  on entry (after the opening brace)
   PEXEC 1/2-before/after-apdrs   around APMlmeDynamicTxRateSwitching()
   PEXEC 3/4-before/after-drs     around MlmeDynamicTxRateSwitching()
 
-Note the AP/P2P code is compiled in for this target, so the AP-side rate
-switching runs too and is a live suspect alongside the STA side.
+Read it as: pAd bad at 3-before-drs means the AP-side call just corrupted it;
+valid at 3 but bad at 1 means an earlier pass did; bad at 1 already means the
+previous tick left the damage. The old entry marker is dropped -- it needed a
+brace-relative anchor, and a previous generator slip put a statement into the
+parameter list that way.
 --- a/common/mlme.c
 +++ b/common/mlme.c
-@@ -851,6 +851,7 @@
- 	IN PVOID SystemSpecific2, 
- 	IN PVOID SystemSpecific3) 
- {
-+	printk(KERN_ERR "PEXEC 0-enter\n");
- 	ULONG			TxTotalCnt;
- 	PRTMP_ADAPTER	pAd = (RTMP_ADAPTER *)FunctionContext;
- #ifdef ANT_DIVERSITY_SUPPORT
-@@ -976,7 +977,9 @@
+@@ -976,7 +976,9 @@
  	{
  #ifdef CONFIG_AP_SUPPORT
  		IF_DEV_CONFIG_OPMODE_ON_AP(pAd)
-+	printk(KERN_ERR "PEXEC 1-before-apdrs\n");
++	printk(KERN_ERR "PEXEC 1-before-apdrs pAd=%p\n", pAd);
  			APMlmeDynamicTxRateSwitching(pAd);
-+	printk(KERN_ERR "PEXEC 2-after-apdrs\n");
++	printk(KERN_ERR "PEXEC 2-after-apdrs pAd=%p\n", pAd);
  #endif /* CONFIG_AP_SUPPORT */
  #ifdef CONFIG_STA_SUPPORT
  		/* perform dynamic tx rate switching based on past TX history*/
-@@ -991,7 +994,9 @@
+@@ -991,7 +993,9 @@
  #endif
  					)
  				&& (!OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_DOZE)))
-+	printk(KERN_ERR "PEXEC 3-before-drs\n");
++	printk(KERN_ERR "PEXEC 3-before-drs pAd=%p\n", pAd);
  				MlmeDynamicTxRateSwitching(pAd);
-+	printk(KERN_ERR "PEXEC 4-after-drs\n");
++	printk(KERN_ERR "PEXEC 4-after-drs pAd=%p\n", pAd);
  		}
  #endif /* CONFIG_STA_SUPPORT */
  	}
