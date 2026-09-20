@@ -30,6 +30,11 @@ BR2_PACKAGE_WIRELESS_TOOLS=y
 BR2_PACKAGE_WPA_SUPPLICANT=y
 BR2_PACKAGE_WPA_SUPPLICANT_CLI=y
 BR2_PACKAGE_WPA_SUPPLICANT_PASSPHRASE=y
+# The vendor mt7601sta driver is WEXT-native (NATIVE_WPA_SUPPLICANT_SUPPORT) and
+# its cfg80211 support is a shim that does not deliver scan results. Buildroot
+# disables wext unless this is set, so "-D wext" would otherwise be ignored and
+# wpa_supplicant would silently fall through to nl80211.
+BR2_PACKAGE_WPA_SUPPLICANT_WEXT=y
 BR2_TARGET_ROOTFS_CPIO=y
 BR2_TARGET_ROOTFS_SQUASHFS=y
 BR2_TARGET_ROOTFS_SQUASHFS4_XZ=y

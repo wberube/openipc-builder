@@ -1,0 +1,21 @@
+From: BeeWi BC7PW bring-up <noreply@example.invalid>
+Subject: [PATCH] mt7601u: build with -DDBG so the driver's own trace exists
+
+The driver gates every diagnostic behind DBGPRINT, which this tree defines as a
+no-op unless the build passes -DDBG (include/os/rt_linux.h:733 vs :762). Without
+it the only output is the handful of bare printk() calls left in by the vendor,
+so there is no way to see the MLME state machine, the scan path or the power-save
+transitions -- and the "Debug" WEXT parameter sets RTDebugLevel regardless, so it
+looks like it works while printing nothing.
+
+With -DDBG in place, RTDebugLevel defaults to RT_DEBUG_ERROR, so a normal boot
+stays close to silent and
+	iwpriv wlan0 set Debug=3
+raises it to RT_DEBUG_TRACE on demand.
+
+--- a/Makefile
++++ b/Makefile
+@@ -139,2 +139,3 @@ mt7601sta-objs += os/linux/ap_ioctl.o
+ EXTRA_CFLAGS += -DDYNAMIC_PD_SUPPORT -DUSB_BULK_BUF_PREALLOC -DRT_CFG80211_SUPPORT -DEXT_BUILD_CHANNEL_LIST
+ EXTRA_CFLAGS += -DUSB_BULK_BUF_ALIGMENT -DALIGMENT_BULKAGGRE_SIZE=3 -DBUF_ALIGMENT_RINGSIZE=2
++EXTRA_CFLAGS += -DDBG

@@ -1,0 +1,37 @@
+From: OpenIPC device support <openipc@example.invalid>
+Subject: [PATCH] sta_cfg: bound-check keyIdx in the SECURITY_DISABLED branch
+
+RT_CMD_STA_IOCTL_SECURITY_DISABLED is taken straight from the WEXT
+SIOCSIWENCODEEXT request, but the key index is never validated against
+the key table before it is used to index pAd->SharedKey[BSS0][keyIdx].
+
+In STA mode that table is declared as
+
+    CIPHER_KEY SharedKey[1][4];   /* include/rtmp.h */
+    /* STA always use SharedKey[BSS0][0..3] */
+
+so indices 4 and 5 address past the end of the array. The writes
+
+    pAd->SharedKey[BSS0][keyIdx].KeyLen = 0;
+    pAd->SharedKey[BSS0][keyIdx].CipherAlg = CIPHER_NONE;
+    NdisZeroMemory(&pAd->SharedKey[BSS0][keyIdx], sizeof(CIPHER_KEY));
+
+then corrupt the adapter fields that follow SharedKey, and
+AsicRemoveSharedKeyEntry() trips its ASSERT(KeyIdx < 4).
+
+The sibling (non-disabled) branch below already performs exactly this
+check, so mirror it here. This is reachable from unprivileged ioctl
+input and was observed in the field with keyIdx reaching 4 and 5.
+
+--- a/sta/sta_cfg.c
++++ b/sta/sta_cfg.c
+@@ -8801,6 +8801,9 @@
+     if (pIoctlSec->flags == RT_CMD_STA_IOCTL_SECURITY_DISABLED)
+     {
+         keyIdx = pIoctlSec->KeyIdx; /*(encoding->flags & IW_ENCODE_INDEX) - 1; */
++        if ((keyIdx < 0) || (keyIdx >= NR_WEP_KEYS))
++            return NDIS_STATUS_FAILURE;
++
+         /* set BSSID wcid entry of the Pair-wise Key table as no-security mode */
+ 	    AsicRemovePairwiseKeyEntry(pAd, BSSID_WCID);
+         pAd->SharedKey[BSS0][keyIdx].KeyLen = 0;

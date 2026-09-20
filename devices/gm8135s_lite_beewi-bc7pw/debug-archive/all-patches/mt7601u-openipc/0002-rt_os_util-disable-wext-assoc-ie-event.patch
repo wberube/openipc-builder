@@ -1,0 +1,19 @@
+--- a/common/rt_os_util.c
++++ b/common/rt_os_util.c
+@@ -134,6 +134,16 @@
+ 	IN UCHAR *ReqVarIEs,
+ 	IN UINT32 ReqVarIELen)
+ {
++	/* Disabled deliberately. Sending the RT_WLAN_EVENT_ASSOC_REQ_IE WEXT
++	 * event corrupts the caller's stack on this kernel -- stack-protector
++	 * reports this frame (wext_notify_event_assoc), and the code in this
++	 * function itself is bounded, so the damage comes from this event's
++	 * send path. It is also not needed: wpa_supplicant drives the driver
++	 * over nl80211/cfg80211 on this device. */
++	(void)pNetDev;
++	(void)ReqVarIEs;
++	(void)ReqVarIELen;
++	return 0;
+ 	char custom[IW_CUSTOM_MAX] = {0};
+ 
+ #if WIRELESS_EXT > 17

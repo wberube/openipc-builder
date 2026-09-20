@@ -1,0 +1,61 @@
+#!/bin/sh
+#
+# /etc is not writable on this board.
+#
+# The root is sugar-free squashfs, and OpenIPC's /init unions it with an
+# upper on /overlay so that the root *looks* writable. Two things go wrong
+# here. There is no rootfs_data partition in the vendor GM8136 flash map, so
+# the upper lands on a tmpfs; and this 3.3 kernel carries the out-of-tree
+# overlayfs, whose mount is issued read-only:
+#
+#	mount -t overlayfs overlayfs -o lowerdir=/,upperdir=/overlay,ro /mnt
+#
+# so every write to / is refused by the overlay, not by squashfs. The result
+# is EOPNOTSUPP rather than EROFS, which is why it surfaces as:
+#
+#	overlayfs: ERROR - failed to whiteout 'gmlib.cfg'
+#	rm: can't remove '/etc/sensors/gmlib.cfg': Operation not supported
+#
+# and why fw_printenv cannot cache its config, and why load_grainmedia cannot
+# relink the sensor profile it is re-pointing at.
+#
+# The fix is to stop asking the overlay for write access and give /etc its own
+# filesystem instead: a tmpfs, seeded from the read-only copy, bind-mounted
+# over the directory. Writes then go to RAM, which also keeps us from copying
+# up pages of a 64M box that is already short of memory. /etc is a few hundred
+# KB, so the cost is negligible.
+#
+# The upper is necessarily volatile: /etc is writable for the life of the
+# boot, not across a power cut. Anything that must survive a reboot already
+# lives in the u-boot environment (wlandev, wlanssid, sensor, ipaddr), which
+# is what fw_setenv is for.
+#
+# Ordered before S30customizer and S40network so that they, the vendor module
+# loader, and fw_printenv all see a writable /etc.
+
+# Already done on this boot -- the marker only exists inside the tmpfs.
+[ -e /etc/.etcrw ] && exit 0
+
+# /tmp is mounted by inittab's `mount -a`, which runs before rcS. It is the
+# only reliably writable directory at this point: / is read-only and /mnt
+# lives inside the read-only overlay, so mkdir there would fail.
+[ -d /tmp ] || exit 0
+
+rm -rf /tmp/.etcrw
+mkdir -p /tmp/.etcrw || exit 0
+
+# Seed from the read-only copy. -a keeps modes, owners and symlinks, which
+# matters: dropbear keys and the passwd/shadow pair have to keep their bits.
+cp -a /etc/. /tmp/.etcrw/ 2>/dev/null
+
+: > /tmp/.etcrw/.etcrw 2>/dev/null
+[ -e /tmp/.etcrw/.etcrw ] || exit 0
+
+# Drop the read-only overlay out from under it, then bind the tmpfs in its
+# place. Tolerant of failure: a camera that boots with a read-only /etc is
+# still a camera, and saying so is more useful than aborting rcS.
+if mount -o bind /tmp/.etcrw /etc; then
+	echo "etc: tmpfs bind mounted, /etc is writable"
+else
+	echo "etc: WARNING - could not bind tmpfs over /etc, /etc stays read-only"
+fi

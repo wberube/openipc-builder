@@ -1,0 +1,22 @@
+--- a/arch/arm/Makefile
++++ b/arch/arm/Makefile
+@@ -38,7 +38,7 @@
+ endif
+ 
+ ifeq ($(CONFIG_CC_STACKPROTECTOR),y)
+-KBUILD_CFLAGS	+=-fstack-protector
++KBUILD_CFLAGS	+=-fstack-protector -fstack-protector-all
+ endif
+ 
+ ifeq ($(CONFIG_CPU_BIG_ENDIAN),y)
+--- a/arch/arm/boot/compressed/Makefile
++++ b/arch/arm/boot/compressed/Makefile
+@@ -141,6 +141,8 @@
+ KBUILD_CFLAGS = $(subst -pg, , $(ORIG_CFLAGS))
+ endif
+ 
++KBUILD_CFLAGS += -fno-stack-protector
++
+ ccflags-y := -fpic -fno-builtin -I$(obj)
+ #asflags-y := -Wa,-march=all
+ 

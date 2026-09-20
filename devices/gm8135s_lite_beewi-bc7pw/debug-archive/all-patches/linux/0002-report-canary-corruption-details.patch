@@ -1,0 +1,38 @@
+--- a/kernel/panic.c
++++ b/kernel/panic.c
+@@ -450,6 +450,7 @@
+ #endif
+ 
+ #ifdef CONFIG_CC_STACKPROTECTOR
++#include <linux/stackprotector.h>
+ 
+ /*
+  * Called when gcc's -fstack-protector feature is used, and
+@@ -457,6 +458,16 @@
+  */
+ void __stack_chk_fail(void)
+ {
++	unsigned long sp, g = __stack_chk_guard;
++	int i;
++
++	asm volatile("mov %0, sp" : "=r" (sp));
++	printk(KERN_EMERG "stack-protector: guard=%08lx @%p ret=%p sp=%08lx\n",
++	       g, &__stack_chk_guard, __builtin_return_address(0), (void *)sp);
++	for (i = 0; i < 64; i++)
++		printk(KERN_EMERG "  [%02d] @%p = %08lx\n", i,
++		       (void *)(sp + i * 4), ((unsigned long *)sp)[i]);
++	dump_stack();
+ 	panic("stack-protector: Kernel stack is corrupted in: %p\n",
+ 		__builtin_return_address(0));
+ }
+--- a/init/main.c
++++ b/init/main.c
+@@ -478,6 +478,8 @@
+ 	 * Set up the the initial canary ASAP:
+ 	 */
+ 	boot_init_stack_canary();
++	printk(KERN_INFO "stack-protector: boot guard=%08lx @%p\n",
++	       __stack_chk_guard, &__stack_chk_guard);
+ 
+ 	cgroup_init_early();
+ 

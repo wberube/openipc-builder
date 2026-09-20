@@ -1,0 +1,32 @@
+--- a/sta/assoc.c
++++ b/sta/assoc.c
+@@ -1537,7 +1537,8 @@
+ 				if ((pEid->Eid == IE_WPA)
+ 				    && (NdisEqualMemory(pEid->Octet, WPA_OUI, 4))
+ 				    && (pAd->StaCfg.AuthMode == Ndis802_11AuthModeWPA
+-					|| pAd->StaCfg.AuthMode == Ndis802_11AuthModeWPAPSK)) {
++					|| pAd->StaCfg.AuthMode == Ndis802_11AuthModeWPAPSK)
++				    && ((pEid->Len + 2) <= MAX_LEN_OF_RSNIE)) {
+ 					NdisMoveMemory(pAd->MacTab.Content[BSSID_WCID].RSN_IE, pVIE, (pEid->Len + 2));
+ 					pAd->MacTab.Content[BSSID_WCID].RSNIE_Len = (pEid->Len + 2);
+ 					DBGPRINT(RT_DEBUG_TRACE,
+@@ -1547,7 +1548,8 @@
+ 				else if ((pEid->Eid == IE_RSN)
+ 					 && (NdisEqualMemory(pEid->Octet + 2, RSN_OUI, 3))
+ 					 && (pAd->StaCfg.AuthMode == Ndis802_11AuthModeWPA2
+-					     || pAd->StaCfg.AuthMode == Ndis802_11AuthModeWPA2PSK)) {
++					     || pAd->StaCfg.AuthMode == Ndis802_11AuthModeWPA2PSK)
++					 && ((pEid->Len + 2) <= MAX_LEN_OF_RSNIE)) {
+ 					NdisMoveMemory(pAd->MacTab.Content[BSSID_WCID].RSN_IE, pVIE, (pEid->Len + 2));
+ 					pAd->MacTab.Content[BSSID_WCID].RSNIE_Len = (pEid->Len + 2);
+ 					DBGPRINT(RT_DEBUG_TRACE,
+@@ -1558,7 +1560,8 @@
+ 				else if ((pEid->Eid == IE_WAPI)
+ 					 && (NdisEqualMemory(pEid->Octet + 4, WAPI_OUI, 3))
+ 					 && (pAd->StaCfg.AuthMode == Ndis802_11AuthModeWAICERT
+-					     || pAd->StaCfg.AuthMode == Ndis802_11AuthModeWAIPSK)) {
++					     || pAd->StaCfg.AuthMode == Ndis802_11AuthModeWAIPSK)
++					 && ((pEid->Len + 2) <= MAX_LEN_OF_RSNIE)) {
+ 					NdisMoveMemory(pAd->MacTab.Content[BSSID_WCID].RSN_IE, pVIE, (pEid->Len + 2));
+ 					pAd->MacTab.Content[BSSID_WCID].RSNIE_Len = (pEid->Len + 2);
+ 					DBGPRINT(RT_DEBUG_TRACE,

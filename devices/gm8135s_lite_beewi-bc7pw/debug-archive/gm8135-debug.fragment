@@ -1,0 +1,20 @@
+# Diagnostics for the mt7601sta fault.
+#
+# The oops showed a wild PC reached by an indirect call from inside the
+# workqueue code (LR = queue_work+0x30) in RtmpMlmeTask, i.e. corrupted
+# memory rather than a clean bad pointer.
+#
+#   CC_STACKPROTECTOR   stack smashes report the function that overflowed
+#                       (-fstack-protector is applied to built-in code and
+#                       to out-of-tree modules alike)
+#   DEBUG_OBJECTS*      a corrupted work_struct is reported when it is queued,
+#                       instead of jumping through the garbage pointer
+#
+# NOTE: CONFIG_DEBUG_SLAB is deliberately NOT set. On this vendor kernel it
+# misfires from early boot -- it reports "Slab corruption" for core caches
+# before the console is even enabled and long before any driver loads, so it
+# is not reporting the fault we are chasing -- and its check_slabp BUG panics
+# during debug_objects_replace_static_objects, which kills the boot outright.
+#
+# Buildroot merges this on top of $(EXTERNAL_VENDOR)/board/gm8136/gm8135.generic.config.
+CONFIG_CC_STACKPROTECTOR=y

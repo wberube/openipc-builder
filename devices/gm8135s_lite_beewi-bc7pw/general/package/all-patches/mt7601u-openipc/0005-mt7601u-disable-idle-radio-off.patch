@@ -1,0 +1,32 @@
+From: BeeWi BC7PW bring-up <noreply@example.invalid>
+Subject: [PATCH] mt7601sta: stop the idle radio-off from killing an unassociated STA
+
+STAMlmePeriodicExec() turns the USB radio off via RT28xxUsbAsicRadioOff() as
+soon as the station is idle and not associated. IDLE_ON() means exactly that,
+so an unassociated STA trips it on the first MLME tick: ASIC_RADIO_OFF, the
+pending bulk-in URBs are cancelled (the "unlink cmd rsp urb" message) and
+fRTMP_ADAPTER_IDLE_RADIO_OFF is set, which makes sync.c and connect.c bail out
+of the scan/join machinery. Nothing wakes the radio again, so get_site_survey
+stays empty and association never starts.
+
+The test was meant to be gated on StaCfg.PSControl.field.EnablePSinIdle, but
+that field does not exist in this source, so it reads "if ( 1". Disable it;
+the power saving this provides is the very thing that breaks the link.
+
+--- a/common/mlme.c
++++ b/common/mlme.c
+@@ -1471,7 +1471,13 @@
+ 
+ #ifdef RTMP_MAC_USB
+ 	/* If station is idle, go to sleep*/
+-	if ( 1
++	/* Disabled: this test is hard-wired to 1 because the field it names
++	 * (EnablePSinIdle) does not exist in this source, and the effect is that
++	 * the radio is switched off as soon as the STA is idle. An unassociated
++	 * STA is idle by definition, so the radio goes off before it can ever
++	 * scan or associate; fRTMP_ADAPTER_IDLE_RADIO_OFF then makes sync.c and
++	 * connect.c skip their work and nothing wakes the radio again. */
++	if ( 0
+ 	/*	&& (pAd->StaCfg.PSControl.field.EnablePSinIdle == TRUE)*/
+ 		&& (pAd->StaCfg.WindowsPowerMode > 0)
+ 		&& (pAd->OpMode == OPMODE_STA) && (IDLE_ON(pAd)) 

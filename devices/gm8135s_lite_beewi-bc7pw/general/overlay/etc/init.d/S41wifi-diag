@@ -1,0 +1,86 @@
+#!/bin/sh
+#
+# BeeWi BC7PW (GM8135S) — Wi-Fi bring-up report.
+#
+# This board has no shell access (probed with a floating wire, no soldering
+# iron), so the Wi-Fi bring-up has to report itself on ttyS0. Runs right after
+# S40network, which is what loads the driver and starts wpa_supplicant.
+#
+# Deliberately lean: the earlier version dumped whole ioctl tables and 250 lines
+# of dmesg, which is more than anyone can paste back. Only the lines that answer
+# "did the radio hear anything, and did it associate" are kept.
+#
+# Delete once Wi-Fi associates.
+#
+ND=wlan0
+
+case "$1" in
+start)
+	[ -n "$(fw_printenv -n wlandev 2>/dev/null)" ] || exit 0
+	sleep 5
+
+	# Both of these need the interface up: rt_ioctl_setparam refuses with
+	# -ENETDOWN otherwise, which is what "Network is down" in earlier logs was.
+	# The handler sets them too; re-assert because they are per-module state.
+	ifconfig "$ND" up 2>/dev/null
+	iwpriv "$ND" set Debug=3 >/dev/null 2>&1
+	iwpriv "$ND" set PSMode=CAM >/dev/null 2>&1
+
+	echo "================= WIFI DIAG BEGIN ================="
+	echo "--- modules:"
+	ls -l /lib/modules/"$(uname -r)"/extra/*.ko 2>&1
+	grep -E "^(mt7601|cfg80211)" /proc/modules || echo "    NOT LOADED"
+
+	echo "--- env:"
+	for v in wlandev wlanssid sensor ipaddr gatewayip; do
+		echo "    $v=$(fw_printenv -n $v 2>&1)"
+	done
+	echo "    wlanpass=<hidden>"
+
+	# Everything up to here is boot noise; keep it on disk and print only the
+	# driver's bring-up tail, so the dmesg below is purely the scan.
+	dmesg -c > /tmp/dmesg.boot 2>/dev/null
+	echo "--- driver bring-up (from this boot, tail 30):"
+	tail -30 /tmp/dmesg.boot 2>/dev/null
+
+	echo "--- iwconfig $ND (Power Management should now be off):"
+	iwconfig "$ND" 2>&1 | sed -n '1,7p'
+
+	echo "--- driver state:"
+	for c in driverVer devinfo bainfo stainfo; do
+		echo "  == $c"
+		iwpriv "$ND" $c 2>&1 | head -12
+	done
+
+	echo "--- scan:"
+	wpa_cli -i "$ND" scan >/dev/null 2>&1
+	iwlist "$ND" scan >/tmp/iwlist.out 2>&1 &
+	iwpid=$!
+	sleep 12
+	kill $iwpid 2>/dev/null
+	echo "  wpa_cli scan_results:"
+	wpa_cli -i "$ND" scan_results 2>&1 | head -12
+	echo "  driver get_site_survey:"
+	iwpriv "$ND" get_site_survey 2>&1
+	echo "  /proc/net/wireless:"
+	cat /proc/net/wireless 2>&1
+	echo "  driver trace for that scan (tail 100):"
+	dmesg | tail -100
+
+	echo "--- association:"
+	wpa_cli -i "$ND" status 2>&1 | sed -n '1,8p'
+	echo "  lease attempt:"
+	udhcpc -i "$ND" -n -q -t 4 2>&1 | tail -4
+	echo "  ifconfig $ND (TX packets > 0 means the radio can transmit):"
+	ifconfig "$ND" 2>&1
+	echo "================== WIFI DIAG END =================="
+	;;
+stop)
+	;;
+*)
+	echo "Usage: $0 {start}"
+	exit 1
+	;;
+esac
+
+exit 0
