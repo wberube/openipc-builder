@@ -1,0 +1,26 @@
+From: OpenIPC
+Subject: [PATCH] wifi: mt7601sta: write SIOCGIWESSID into the buffer the caller gave
+
+For a point get the WEXT core hands the handler its own kernel buffer, so copy_to_user()
+runs the range check against a kernel address. That passes on a 3G/1G split and fails on
+this SoC's 2G/2G one (PAGE_OFFSET 0x80000000), where every SIOCGIWESSID that had an SSID
+to report returned EFAULT.
+--- a/os/linux/sta_ioctl.c
++++ b/os/linux/sta_ioctl.c
+@@ -1407,9 +1407,14 @@
+ 						pIoctlEssid, 0, RT_DEV_PRIV_FLAGS_GET(dev));
+ 	data->length = pIoctlEssid->SsidLen;
+ 
++	/* essid is the kernel buffer the WEXT core manages for point gets, so it must not
++	   go through copy_to_user(): with PAGE_OFFSET at 0x80000000 the range check
++	   rejects a kernel address and the ioctl fails with EFAULT as soon as there is
++	   an SSID to report -- wpa_supplicant carries on without it and the 4-way
++	   handshake never starts. */
++	memcpy(essid, _ssid, min(data->length, (UINT16)(strlen(_ssid)+1)));
++
+ 	RT_CMD_STATUS_TRANSLATE(pIoctlEssid->Status);
+-	if (copy_to_user(essid, _ssid, min(data->length, (UINT16)(strlen(_ssid)+1))))
+-		pIoctlEssid->Status = -EFAULT;
+ 	return pIoctlEssid->Status;
+ }
+ 

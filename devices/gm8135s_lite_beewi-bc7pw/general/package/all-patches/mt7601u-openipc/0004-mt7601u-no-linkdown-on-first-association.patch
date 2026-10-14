@@ -1,0 +1,29 @@
+From: OpenIPC
+Subject: [PATCH] wifi: mt7601sta: stop indicating a link down while the link comes up
+
+LinkUp() indicates a media disconnect before completing, meant for a roam from a
+different SSID. It fires on a first association too, because LastSsid still holds a
+previous value at that point, and wpa_supplicant reads it as the AP going away: it
+drops to SCANNING with bssid 00:00:00:00:00:00 and defers every EAPOL frame of the
+4-way handshake, so the port never secures and the AP deauthenticates with Reason=15.
+A real disconnection is already indicated by the LinkDown path.
+
+--- a/sta/connect.c
++++ b/sta/connect.c
+@@ -2140,9 +2140,13 @@
+ 					break;
+ 				}
+ 			}
+-			/* Send link down event before set to link up */
+-			RTMP_IndicateMediaState(pAd, NdisMediaStateDisconnected);
+-			pAd->ExtraInfo = GENERAL_LINK_DOWN;
++			/* No link down is indicated here. This runs while the link is
++			 * coming up, and wpa_supplicant reads it as the AP going away: it
++			 * drops to SCANNING with bssid 00:00:00:00:00:00 and then defers
++			 * every EAPOL frame of the 4-way handshake, so the port never
++			 * secures and the AP deauthenticates with Reason=15. A real
++			 * disconnection is already indicated by the LinkDown path.
++			 */
+ 			DBGPRINT(RT_DEBUG_TRACE, ("NDIS_STATUS_MEDIA_DISCONNECT Event AA!\n"));
+ 			break;
+ 		}

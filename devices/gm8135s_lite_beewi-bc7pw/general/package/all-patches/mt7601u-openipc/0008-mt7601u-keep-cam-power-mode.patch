@@ -1,0 +1,24 @@
+From: OpenIPC
+Subject: [PATCH] wifi: mt7601sta: keep the adapter in CAM power mode
+
+The power saving this driver is built with is not usable here: an associated
+link that MlmeCheckPsmChange() puts into PWR_SAVE stops passing traffic, and
+the idle path switches the radio off outright (0003). Pin WindowsPowerMode to
+CAM after the profile is read, so that a PSMode line in the .dat -- or anything
+else that sets it -- cannot put the link to sleep.
+
+--- a/common/cmm_profile.c
++++ b/common/cmm_profile.c
+@@ -4022,6 +4022,12 @@
+ 									pAd->StaCfg.WindowsPowerMode = Ndis802_11PowerModeCAM;
+ 								pAd->StaCfg.WindowsBatteryPowerMode = Ndis802_11PowerModeCAM;
+ 							}
++							/* CAM is not optional on this chip: an associated link that is
++							 * put into PWR_SAVE wakes up deaf, and the idle path would switch
++							 * the radio off outright. Whatever the profile asked for, stay
++							 * awake. */
++							RTMP_SET_PSM_BIT(pAd, PWR_ACTIVE);
++							pAd->StaCfg.WindowsPowerMode = Ndis802_11PowerModeCAM;
+ 							DBGPRINT(RT_DEBUG_TRACE, ("PSMode=%ld\n", pAd->StaCfg.WindowsPowerMode));
+ 						}
+ 					}

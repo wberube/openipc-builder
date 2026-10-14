@@ -1,0 +1,57 @@
+From: OpenIPC
+Subject: [PATCH] wifi: mt7601sta: stop zeroing the middle of the BSSID in wireless events
+
+RtmpOSWrielessEventSend() stores the address in wrqu.ap_addr.sa_data and then
+unconditionally writes wrqu.data.length. The two are members of the same union, and
+struct iw_point is { void *pointer; __u16 length; __u16 flags; } -- 4-byte pointer on
+this ARM target -- so length lands at offset 4 and flags at offset 6, which is
+sa_data[2] and sa_data[4] respectively.
+
+The visible effect was an address with its middle two bytes missing. The CGIWAP event
+for a completed association delivered 4c:22:00:00:23:9d for an AP whose BSSID is
+4c:22:f3:74:23:9d (the first and last pairs survive: offsets 2 and 6 are only touched
+for flags, which is -1 on that call). wpa_supplicant logged "new AP:
+4c:22:00:00:23:9d", failed to match the AP against any configured network, and
+deauthenticated with reason 3 (DEAUTH_LEAVING), which the AP reported as a 4-way
+handshake timeout (Reason=15).
+
+Fill in either the address or the data, never both.
+
+Reported-by: boot log in devices/gm8135s_lite_beewi-bc7pw/NOTES.md
+--- a/os/linux/rt_linux.c
++++ b/os/linux/rt_linux.c
+@@ -1500,16 +1500,27 @@
+ 
+ 	memset(&wrqu, 0, sizeof (wrqu));
+ 
+-	if (flags > -1)
+-		wrqu.data.flags = flags;
+-
+ 	if (pSrcMac)
++	{
++		/* An address and a data payload are separate members of the same
++		 * union, and struct iw_point puts length at offset 4 and flags at
++		 * offset 6 -- on top of sa_data[2..5]. Writing the data fields for
++		 * an address event therefore corrupts the address, and the
++		 * length = 0 below zeroed the middle two bytes of every BSSID that
++		 * reached wpa_supplicant: it received 4c:22:00:00:23:9d instead of
++		 * 4c:22:f3:74:23:9d, could not match the AP to a network
++		 * configuration, and deauthenticated (Reason=3, DEAUTH_LEAVING).
++		 */
+ 		memcpy(wrqu.ap_addr.sa_data, pSrcMac, MAC_ADDR_LEN);
+-
+-	if ((pData != NULL) && (dataLen > 0))
+-		wrqu.data.length = dataLen;
++	}
+ 	else
+-		wrqu.data.length = 0;
++	{
++		if (flags > -1)
++			wrqu.data.flags = flags;
++
++		if ((pData != NULL) && (dataLen > 0))
++			wrqu.data.length = dataLen;
++	}
+ 
+ 	wireless_send_event(pNetDev, eventType, &wrqu, (char *)pData);
+ 	return 0;

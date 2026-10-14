@@ -1,0 +1,20 @@
+From: OpenIPC
+Subject: [PATCH] wifi: mt7601sta: lower the cfg80211 beacon version guard for this kernel
+
+GrainMedia backported the newer cfg80211 beacon_data/beacon_parameters fields
+into this 3.3 kernel, so the (3,4,0) guard on the beacon structures in
+include/rtmp_cmd.h is wrong here and the header does not compile with it
+(CMD_RTPRIV_IOCTL_80211_BEACON has no member ssid_len). cfg80211drv.c already
+builds its beacon handling against (3,2,0); lower the guard to match.
+
+--- a/include/rtmp_cmd.h
++++ b/include/rtmp_cmd.h
+@@ -380,7 +380,7 @@
+         UINT32 beacon_head_len; /* Before TIM IE */
+ 		UINT32 beacon_tail_len; /* After TIM IE */
+ 
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,0))
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+ 	UCHAR *beacon_ies;
+ 	UINT32 beacon_ies_len;
+ 	UCHAR *proberesp_ies;

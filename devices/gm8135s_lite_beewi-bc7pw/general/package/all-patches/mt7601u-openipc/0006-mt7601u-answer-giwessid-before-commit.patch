@@ -1,0 +1,41 @@
+From: OpenIPC
+Subject: [PATCH] wifi: mt7601sta: answer SIOCGIWESSID before the association is committed
+
+The association event is sent from inside StaAddMacTableEntry(), before the association
+is committed: CommonCfg.Ssid is still empty (COPY_SETTINGS_FROM_MLME_AUX_TO_ACTIVE_CFG
+runs later) and the link-up flag is not raised yet. wpa_supplicant reads an empty answer
+as driver-initiated BSS selection, finds no network for that empty SSID and
+deauthenticates with reason 3, which the AP reports as a 4-way handshake timeout.
+--- a/sta/sta_cfg.c
++++ b/sta/sta_cfg.c
+@@ -7999,6 +7999,30 @@
+ 		pSsid->SsidLen = pAd->CommonCfg.SsidLen;
+ 		memcpy(pSsid->pSsid, pAd->CommonCfg.Ssid, pAd->CommonCfg.SsidLen);
+ 	}
++	/*
++	 * wpa_supplicant asks for the SSID as soon as it handles the association event,
++	 * which is sent from inside StaAddMacTableEntry(). The association is not committed
++	 * at that point: CommonCfg.Ssid is still empty -- COPY_SETTINGS_FROM_MLME_AUX_TO_
++	 * ACTIVE_CFG runs later -- and fOP_STATUS_MEDIA_STATE_CONNECTED is not raised until
++	 * LinkUp(). Answering length 0 makes wpa_supplicant treat the association as
++	 * driver-initiated: it looks up a network by that empty SSID, finds none and
++	 * deauthenticates with reason 3 (DEAUTH_LEAVING), which the AP reports back as a
++	 * 4-way handshake timeout. The SSID the join used is still in MlmeAux, so use it.
++	 */
++	else if (pAd->CommonCfg.SsidLen > 0 || pAd->MlmeAux.SsidLen > 0)
++	{
++		if (pAd->CommonCfg.SsidLen > 0)
++		{
++			pSsid->SsidLen = pAd->CommonCfg.SsidLen;
++			memcpy(pSsid->pSsid, pAd->CommonCfg.Ssid, pAd->CommonCfg.SsidLen);
++		}
++		else
++		{
++			pSsid->SsidLen = pAd->MlmeAux.SsidLen;
++			memcpy(pSsid->pSsid, pAd->MlmeAux.Ssid, pAd->MlmeAux.SsidLen);
++		}
++		DBGPRINT(RT_DEBUG_TRACE, ("GIWTRAP giwessid flag=%d active=%d aux=%d -> %d\n", OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_MEDIA_STATE_CONNECTED), pAd->CommonCfg.SsidLen, pAd->MlmeAux.SsidLen, pSsid->SsidLen));
++	}
+ #ifdef RTMP_MAC_USB
+ #ifdef WPA_SUPPLICANT_SUPPORT
+ 	/* Add for RT2870 */
