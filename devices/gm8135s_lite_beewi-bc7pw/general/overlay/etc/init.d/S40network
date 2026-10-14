@@ -1,0 +1,73 @@
+#!/bin/sh
+#
+# BeeWi BC7PW (GM8135S) — shadows the general S40network for one reason.
+#
+# The general script gives eth0 a static address and forces it up in every
+# case. This board enumerates an eth0 whether or not anything is plugged into
+# it, so the camera ends up dual-homed on one subnet: wlan0 with its DHCP lease
+# and eth0 with netaddr_fallback and no carrier. The two directly-connected
+# routes are equal, so on-subnet traffic -- ARP, ping, and the replies to
+# inbound SSH or HTTP -- can be routed out the dead port, while DHCP (bound to
+# wlan0) and off-subnet flows (the default route) keep working. Only give eth0
+# an address once it actually has carrier; without one it installs no route and
+# cannot take traffic away from the wireless link.
+#
+dev=$(fw_printenv -n wlandev)
+mac=$(fw_printenv -n wlanmac)
+net=$(fw_printenv -n netaddr_fallback)
+eth=$(fw_printenv -n ethaddr)
+
+set_wireless() {
+	path=/etc/wireless
+	if $path/usb "$dev" || $path/sdio "$dev"; then
+		[ -n "$mac" ] && ip link set dev wlan0 address "$mac"
+		ifup wlan0
+	elif $path/modem "$dev"; then
+		ifup usb0
+		ifup eth1
+	fi
+	if [ -e /sys/class/net/eth0 ]; then
+		ifconfig eth0 hw ether "${eth:-00:00:23:34:45:66}" up
+		# The PHY negotiates from power-on, so a cable that is plugged in
+		# already reports carrier by the time init gets here.
+		sleep 1
+		if [ "$(cat /sys/class/net/eth0/carrier 2>/dev/null)" = "1" ]; then
+			ifconfig eth0 "${net:-192.168.2.10}"
+		fi
+	fi
+}
+
+start() {
+	echo "Starting network..."
+	ifup lo
+	if [ -n "$dev" ]; then
+		set_wireless
+	else
+		ifup eth0
+	fi
+}
+
+stop() {
+	echo "Stopping network..."
+	ifdown lo
+	ifdown -f wlan0
+	ifdown -f usb0
+	ifdown -f eth1
+	ifdown -f eth0
+}
+
+case "$1" in
+	start|stop)
+		$1
+		;;
+
+	restart|reload)
+		stop
+		start
+		;;
+
+	*)
+		echo "Usage: $0 {start|stop|restart|reload}"
+		exit 1
+		;;
+esac

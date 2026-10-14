@@ -1,0 +1,14 @@
+#!/bin/sh
+#
+# BeeWi BC7PW (GM8135S) — load the MT7601 STA driver.
+#
+# Nothing is poked here for power saving: the driver's idle radio-off is
+# disabled and the power mode pinned to CAM in the source (0003 and 0008).
+#
+if [ "$1" = "mt7601sta-beewi-bc7pw" ]; then
+	modprobe cfg80211
+	modprobe mt7601sta
+	exit 0
+fi
+
+exit 1
