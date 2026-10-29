@@ -1,0 +1,18 @@
+# BeeWi BC7PW (GM8135S) — overrides the firmware's stanza.
+#
+# The firmware starts wpa_supplicant with "-D nl80211,wext", i.e. it tries the
+# cfg80211/nl80211 path first. This vendor driver is WEXT-native and its cfg80211
+# support is a shim: over nl80211 it attaches and accepts scans but never
+# delivers a BSS, so wpa_supplicant sits in SCANNING and never associates. Drive
+# the driver's native WEXT path instead.
+#
+# This needs BR2_PACKAGE_WPA_SUPPLICANT_WEXT=y in the defconfig -- with wext
+# compiled out, "-D wext" is ignored and wpa_supplicant silently falls through
+# to nl80211.
+#
+iface wlan0 inet dhcp
+    pre-up printf 'ap_scan=1\n' > /tmp/wpa_supplicant.conf
+    pre-up wpa_passphrase "$(fw_printenv -n wlanssid)" "$(fw_printenv -n wlanpass)" >> /tmp/wpa_supplicant.conf
+    pre-up sed -i 's/#psk.*/scan_ssid=1/g' /tmp/wpa_supplicant.conf
+    pre-up wpa_supplicant -B -i wlan0 -D wext -c /tmp/wpa_supplicant.conf
+    post-down killall -q wpa_supplicant

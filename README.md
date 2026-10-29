@@ -20,6 +20,7 @@ Aoni EP01J05             T31L         ?         RTL8188FU_USB    NOR_16M   new
 Azarton C1               T20X         JXF23     RTL8189FS_SDIO   NOR_16M   done
 Azarton C1               T31X         GC2053    RTL8189FS_SDIO   NOR_16M   done
 Babysense See HD IP206   SSC333       GC2053    RTL8188FU_USB    NOR_16M   done
+BeeWi BC7PW              GM8135S      OV9732    MT7601U_USB      NOR_16M   wifi-ok, rate-switch-no
 Botslab C213             T23N         SC3332    ATBM6012B_USB    NOR_8M    **INIT** - frozen
 CCDCAM IM50Q01           SSC377QE     IMX335    -                NOR_16M   done
 ChinaTelecom DS-YTJ5301  SSC30KD      GC2053    RTL8188FU_USB    NOR_16M   video-ok, wifi-no, motors-no
@@ -141,6 +142,7 @@ TP-Link Tapo C200 v3.00         =>     TP-Link Tapo TC70 V3
 Rostelecom IPC8232SWC-WE-B      =>     Uniview C1L-2WN-G
 Rostelecom IPC C22E-S2 v2       =>     Imou IPC-C22E-S2-v2
 Uniview C1L-2WN-G-RU            =>     Uniview C1L-2WN-G
+Wansview NCM703GC               =>     BeeWi BC7PW
 ```
 
 

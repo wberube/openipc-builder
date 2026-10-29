@@ -110,6 +110,7 @@ SMOKE_TARGETS = [
     "t31_lite_wyze-v3b",                 # Ingenic, the only mips
     "t20_ultimate_azarton-c1",           # Ingenic ultimate
     "hi3536dv100_wfbng",                 # the only gnueabi toolchain in the tree
+    "gm8135s_lite_beewi-bc7pw",          # GrainMedia lite, the uclibcgnueabi toolchain
     "gk7205v200_wfbng",                  # devices/common, and the wfbng flavour
     "hi3516cv300_mini",                  # devices/common, mini
     "gk7205v200_lte",                    # devices/common, lte
