@@ -1,0 +1,30 @@
+The SDK demo board the generic EV200 DTS describes carries a GC1084 at
+0x37 with a 27 MHz MCLK. The Meari Mini 7C carries a SuperPix SC1245: its
+8-bit write address is 0x60, i.e. 7-bit 0x30, and sensor_sc1245.c asks
+for a 24 MHz MCLK. The sensor subdev walks the built-in sensor registry,
+but it can only reach the part at the i2c client address the DTS gives
+it, so point the client at 0x30 and set the matching clock.
+
+--- a/arch/arm/boot/dts/ak3918en080_v200.dts
++++ b/arch/arm/boot/dts/ak3918en080_v200.dts
+@@ -105,9 +105,9 @@
+ 	#address-cells = <1>;
+ 	#size-cells = <0>;
+ 
+-	sensor0: camera@37 {
++	sensor0: camera@30 {
+ 		compatible = "anyka,sensor0";
+-		reg = <0x37>;
++		reg = <0x30>;
+ 		reset-gpio = <&gpio 0 1>;
+ 		status = "okay";
+ 
+@@ -232,7 +232,7 @@
+ 
+ 	clocks = <&gclk_asic 17>;
+ 	clock-names = "camera";
+-	mclk-mhz = <27>;
++	mclk-mhz = <24>;
+ 	memory-region = <&video_pool>;
+ 	status = "okay";
+ 

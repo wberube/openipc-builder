@@ -1,0 +1,29 @@
+Keep the built-in sensor registrations across the sensor teardown.
+
+The legacy aksensor and the new ak-cam-sensor both call
+ispdrv_remove_all_sensors() from their remove paths, wiping the ISP
+sensor registry that the CONFIG_SENSOR_* drivers populated at boot.
+Unbinding the legacy host, or replacing the new subdev, then leaves the
+registry empty and sensor_init fails with -ENODEV. The registry belongs
+to the ISP core, not to either subdev, so drop the calls.
+
+--- a/drivers/media/platform/soc_camera/plat-anyka/ak_sensor.c
++++ b/drivers/media/platform/soc_camera/plat-anyka/ak_sensor.c
+@@ -601,6 +601,4 @@ static int aksensor_remove(struct i2c_client *client)
+ 	kfree(priv);
+ 
+-	ispdrv_remove_all_sensors();
+-
+ 	return 0;
+ }
+ 
+--- a/drivers/media/platform/anyka/ak-cam-sensor.c
++++ b/drivers/media/platform/anyka/ak-cam-sensor.c
+@@ -409,7 +409,6 @@ static int ak_cam_sensor_remove(struct i2c_client *client)
+ 	kfree(priv);
+ 
+-	ispdrv_remove_all_sensors();
+ 	cur_sensor_info = NULL;
+ 
+ 	return 0;
+ }

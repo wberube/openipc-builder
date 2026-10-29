@@ -1,0 +1,71 @@
+The vendor U-Boot board table's wlanPwr entry is GPIO 20 (0x14), not
+the demo board's GPIO 34: ppsapp calls pps_wifi_set_pwr on it, and the
+USB WiFi module stays unpowered until it is driven. The same table shows
+the demo user-gpio pins (6, 41, 42, 24) are this board's motor coils and
+LEDs, and the demo speaker-enable GPIO 7 is 4wir_Tbin2. Stop the demo
+nodes from driving them: move wifi_en to GPIO 20, reduce user-gpio to
+that pin, and disable the demo motors and audio until the real PTZ,
+IR/white lamp and speaker pins are brought up.
+
+--- a/arch/arm/boot/dts/ak3918en080_v200.dts
++++ b/arch/arm/boot/dts/ak3918en080_v200.dts
+@@ -48,7 +48,7 @@
+ 	};
+ 
+ 	wifi_en_pins: wifi_en_pins {
+-		anyka,pins = <34>;
++		anyka,pins = <20>;
+ 		anyka,function = <0>;
+ 		anyka,pull = <0x00000010>;
+ 	};
+@@ -158,7 +158,7 @@
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&wifi_en_pins>;
+ 
+-		enable-gpios = <&gpio 34 0>;
++		enable-gpios = <&gpio 20 0>;
+ 		power-on-delay-ms = <2000>;
+ 		power-off-delay-ms = <200>;
+ 		status = "disable";
+@@ -187,7 +187,7 @@
+ 	pinctrl-0 = <&motor0_pins>;
+ 	phase-gpios = <&gpio 19 0>, <&gpio 20 0>, <&gpio 10 0>, <&gpio 11 0>;
+ 	angular-speed = <28>;
+-	status = "okay";
++	status = "disabled";
+ };
+ 
+ &motor1 {
+@@ -195,20 +195,18 @@
+ 	pinctrl-0 = <&motor1_pins>;
+ 	phase-gpios = <&gpio 15 0>, <&gpio 14 0>, <&gpio 13 0>, <&gpio 23 0>;
+ 	angular-speed = <28>;
+-	status = "okay";
++	status = "disabled";
+ };
+ 
+ / {
+ 	user_gpio: user-gpio {
+ 		compatible = "anyka,user-gpio";
+ 		pinctrl-names = "default";
+-		pinctrl-0 = <&user_gpio_pins>;
++		pinctrl-0 = <&wifi_en_pins>;
+ 
+-		gpio-names = "IR_LED", "wifi_en", "ircut_a", "ircut_b",
+-			     "WHITE_LED";
+-		gpios = <&gpio 6 0>, <&gpio 34 0>, <&gpio 42 0>,
+-			<&gpio 41 0>, <&gpio 24 0>;
+-		output-defaults = <1 1 0 0 0>;
++		gpio-names = "wifi_en";
++		gpios = <&gpio 20 0>;
++		output-defaults = <0>;
+ 		status = "okay";
+ 	};
+ };
+@@ -252,5 +250,5 @@
+ 	speak-gpios = <&gpio 7 1>;
+ 	speak-gpios-en = <1>;
+ 	anyka,playback-mode = <1>;
+-	status = "okay";
++	status = "disabled";
+ };

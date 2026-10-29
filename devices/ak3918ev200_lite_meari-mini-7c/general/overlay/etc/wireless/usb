@@ -1,0 +1,27 @@
+#!/bin/sh
+#
+# The Meari Mini 7C powers its USB WiFi module from wlanPwr, GPIO 20
+# (the vendor board table's entry). The demo DTS used GPIO 34, which
+# leaves the module unpowered; the DTS patch moves wifi_en to 20.
+#
+if [ "$1" = "8188fu" ]; then
+	if [ -w /sys/user-gpio/wifi_en ]; then
+		echo 0 > /sys/user-gpio/wifi_en
+		sleep 3
+		echo 1 > /sys/user-gpio/wifi_en
+		sleep 2
+	fi
+
+	modprobe 8188fu
+
+	# The module has to enumerate and bind before ifup wlan0.
+	i=0
+	while [ ! -e /sys/class/net/wlan0 ] && [ "$i" -lt 10 ]; do
+		sleep 1
+		i=$((i + 1))
+	done
+
+	exit 0
+fi
+
+exit 1

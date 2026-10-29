@@ -1,0 +1,115 @@
+system:
+  sensor_config: /etc/sensors/isp_sc1245.conf
+  web_port: 80
+  web_enable_auth: false
+  web_auth_user: admin
+  web_auth_pass: 12345
+  web_auth_skiplocal: true
+  web_enable_static: false
+  isp_thread_stack_size: 16384
+  venc_stream_thread_stack_size: 16384
+  web_server_thread_stack_size: 65536
+  time_format: "%Y-%m-%d %H:%M:%S"
+  watchdog: 30
+
+isp:
+  mirror: false
+  flip: false
+  antiflicker: 60
+
+osd:
+  enable: true
+  reg0_text: "Anyka"
+  reg0_font: DejaVuSansMono
+  reg0_posx: 16
+  reg0_posy: 16
+  reg0_size: 32.0
+  reg0_color: 0xFFFF
+  reg0_opal: 255
+  reg1_text: "$t"
+  reg1_font: DejaVuSansMono
+
+mdns:
+  enable: false
+
+onvif:
+  enable: false
+  enable_auth: false
+  auth_user: admin
+  auth_pass: 12345
+
+rtsp:
+  enable: true
+  enable_auth: false
+  auth_user: admin
+  auth_pass: 12345
+  port: 554
+
+record:
+  enable: false
+  continuous: false
+  path: /mnt/sdcard/recordings
+  #filename: "output.mp4"
+  #segment_duration: 0
+  #segment_size: 52428800
+
+stream:
+  enable: false
+  udp_srcport: 5600
+  dest:
+    - udp://239.255.255.0:5600
+
+night_mode:
+  enable: false
+  ir_sensor_pin: 62
+  check_interval_s: 10
+  ir_cut_pin1: 14
+  ir_cut_pin2: 13
+  ir_led_pin: 47
+  pin_switch_delay_us: 150
+  adc_device: /dev/sar_adc_drv
+  lamp: ir
+  adc_threshold: 128
+
+http_post:
+  enable: false
+  host: <your host>
+  url: /~example/000000000000/%Y/%m/%d/%H.%M.jpg
+  width: 640
+  height: 360
+  qfactor: 90
+  interval: 60
+  login: <your login>
+  password: <yout pass>
+
+audio:
+  enable: false
+  srate: 48000
+  bitrate: 128
+
+mp4:
+  enable: true
+  codec: H264
+  # The vendor's sample_venc segfaults with rcMode 0 (CBR) on this SDK and
+  # produces a stream with the default FIXQP. Switching to fixed QP.
+  mode: QP
+  width: 1280
+  height: 720
+  fps: 25
+  gop: 40
+  bitrate: 1024
+  profile: 0
+
+jpeg:
+  enable: true
+  width: 640
+  height: 360
+  qfactor: 70
+
+mjpeg:
+  enable: true
+  mode: CBR
+  width: 640
+  height: 360
+  fps: 25
+  bitrate: 1024

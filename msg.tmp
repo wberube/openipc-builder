@@ -1,0 +1,8 @@
+anyka-cam: halve the JPEG capture buffer size
+
+The AK3918EV200 has 64 MB of RAM and a ~18 MB coherent pool. With main
+capture and the H.264 encoder holding their buffers, the MJPEG encoder's
+third context cannot allocate a full raw-frame-sized JPEG CAPTURE buffer
+and REQBUFS fails with -ENOMEM. Size it at half the raw frame, which is
+the documented worst case for a baseline JPEG and still far above the
+observed ~80 KB frames.

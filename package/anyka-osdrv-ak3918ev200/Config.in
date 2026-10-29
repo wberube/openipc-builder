@@ -1,0 +1,9 @@
+config BR2_PACKAGE_ANYKA_OSDRV_AK3918EV200
+	bool "anyka-osdrv-ak3918ev200"
+	depends on BR2_LINUX_KERNEL
+	help
+	  Anyka AK3918EV200 userspace SDK libraries (libakmedia,
+	  libakispsdk, libakstreamenc, libakuio, ...) and the SC1245 ISP
+	  configuration, taken from the vendor rootfs. The SC1245, ISP2,
+	  VENC and ALSA kernel drivers are built into the OpenIPC kernel,
+	  so this package installs no kernel modules.

@@ -52,6 +52,7 @@ Jooan Q3R-U              T23N         SC1346    ATBM6012B_USB    NOR_8M    **INI
 JVS INGT10 GQS60EP       T10A         OV9750    -                NOR_8M    done
 Lenovo Snowman 1080P     HI3518EV200  SC2035    RTL8188EUS_USB   NOR_16M   in progress, LightSensor-no
 LSC 3215672              T23N         SC2331    ATBM6012B_USB    NOR_8M    **INIT** - progress
+Meari Mini 7C            AK3918EV200  SC1245    RTL8188FTV_USB   NOR_8M    in progress
 Meari Speed 6S           SSC333       JXF37     RTL8188FU_USB    NOR_16M   video-yes, wifi-yes, motors-no
 OpenIPC AIO Mario        SSC338Q      IMX335    RTL8812AU_USB    NOR_16M   done
 OpenIPC AIO Thinker      SSC338Q      IMX335                     NOR_16M   done
@@ -133,6 +134,7 @@ Dahua IPC-HFW1230SP-V3          =>     Dahua IPC-HFW1230SP-V2
 Dahua IPC-C22C-LC               =>     Imou IPC-С22CP
 Imou IPC-С22EP-A                =>     Imou IPC-С22CP
 Imou IPC-F22AP                  =>     Imou IPC-С22CP
+Merkury Smart 720p              =>     Meari Mini 7C
 Switcam HS303 v3                =>     Qtech QVC-IPC-136W
 Tiandy TC-C320N                 =>     Tiandy TC-C321N
 Tiandy TC-C320N v2              =>     Tiandy TC-C321N v2

@@ -1,0 +1,13 @@
+The Meari Mini 7C has no Ethernet port. The EV200 demo DTS enables the
+Synopsys GMAC, which probes without a PHY (BMCR reads 0xffff) yet still
+reports link up and creates a dead eth0. Disable the controller.
+
+--- a/arch/arm/boot/dts/ak3918ev200-demb.dts
++++ b/arch/arm/boot/dts/ak3918ev200-demb.dts
+@@ -19,6 +19,6 @@
+  * them, and there is no PHY reset line: both are board wiring.
+  */
+ &ethernet {
+-	status = "okay";
++	status = "disabled";
+ };

@@ -1,0 +1,4 @@
+# Use the V4L2 ak-cam bridge instead of the legacy VIDEO_AK host.
+# CONFIG_VIDEO_AK is not set
+CONFIG_VIDEO_AK_CAM=y
+CONFIG_VIDEO_AK_CAM_SENSOR=y

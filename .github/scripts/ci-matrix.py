@@ -102,6 +102,7 @@ SMOKE_WORKFLOWS = {"master.yml"}
 # directories. --self-test enforces that cover rather than the list, so these can
 # be re-picked freely while it holds.
 SMOKE_TARGETS = [
+    "ak3918ev200_lite_meari-mini-7c",    # Anyka lite, the AK3918EV200 4.4 kernel
     "gk7205v200_lite_tiandy-tc-c321n",   # Goke lite
     "hi3518ev200_lite_switcam-hs303",    # HiSilicon lite
     "hi3516ev300_ultimate_rvi-1ncmw2028",  # HiSilicon ultimate

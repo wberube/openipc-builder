@@ -1,0 +1,52 @@
+--- a/arch/arm/boot/dts/ak3918en080_v200.dts
++++ b/arch/arm/boot/dts/ak3918en080_v200.dts
+@@ -53,6 +53,12 @@
+ 		anyka,pull = <0x00000010>;
+ 	};
+ 
++	mini7c_gpio_pins: mini7c_gpio_pins {
++		anyka,pins = <20 23 24 47 14 13 15 11>;
++		anyka,function = <0>;
++		anyka,pull = <0x00000010>;
++	};
++
+ 	motor0_pins: motor0_pins {
+ 		anyka,pins = <19 20 10 11>;
+ 		anyka,function = <0>;
+@@ -126,13 +132,13 @@
+ &gpiokeys {
+ 	#address-cells = <1>;
+ 	#size-cells = <0>;
+-	pinctrl-0 = <&gpiokey_pins>;
++	pinctrl-0 = <&mini7c_gpio_pins>;
+ 	pinctrl-names = "default";
+ 	status = "okay";
+ 
+-	key_detect {
+-		label = "key_detect";
+-		gpios = <&gpio 47 1>;
++	reset {
++		label = "reset";
++		gpios = <&gpio 11 1>;
+ 		linux,code = <116>;
+ 		debounce-interval = <100>;
+ 		wakeup-source;
+@@ -202,11 +208,14 @@
+ 	user_gpio: user-gpio {
+ 		compatible = "anyka,user-gpio";
+ 		pinctrl-names = "default";
+-		pinctrl-0 = <&wifi_en_pins>;
++		pinctrl-0 = <&mini7c_gpio_pins>;
+ 
+-		gpio-names = "wifi_en";
+-		gpios = <&gpio 20 0>;
+-		output-defaults = <0>;
++		gpio-names = "wifi_en", "red_led", "blue_led", "ir_led",
++			     "ir_cut_1", "ir_cut_2", "ac_shdn";
++		gpios = <&gpio 20 0>, <&gpio 23 0>, <&gpio 24 0>,
++			<&gpio 47 0>, <&gpio 14 0>, <&gpio 13 0>,
++			<&gpio 15 0>;
++		output-defaults = <0 1 1 1 0 0 0>;
+ 		status = "okay";
+ 	};
+ };

@@ -1,0 +1,22 @@
+Size the JPEG CAPTURE buffer against the real worst case on a 64 MB part.
+
+ak_venc_cap_size() sizes a JPEG CAPTURE buffer as the full raw frame
+(width * height * 3 / 2) even though the comment above it documents the
+worst case as about half that. On the 64 MB AK3918EV200 the coherent
+pool is roughly 18 MB; with main capture holding four YUV420 buffers
+and the H.264 encoder its output buffers, the MJPEG encoder's third
+context cannot allocate a full-size JPEG CAPTURE buffer and
+VIDIOC_REQBUFS fails with -ENOMEM. Half the raw frame still leaves
+ample room for a 1280x720 baseline JPEG (observed frames are ~80 KB).
+
+--- a/drivers/media/platform/anyka/ak-venc.c
++++ b/drivers/media/platform/anyka/ak-venc.c
+@@ -1110,7 +1110,7 @@ static unsigned ak_venc_cap_size(u32 fourcc, unsigned width, unsigned height)
+ 	if (fourcc != V4L2_PIX_FMT_JPEG)
+ 		return ak_venc_bitstream_size(width, height);
+ 
+-	size = width * height * 3 / 2;
++	size = width * height * 3 / 4;
+ 	if (size < AK_VENC_MIN_BITSTREAM)
+ 		size = AK_VENC_MIN_BITSTREAM;
+ 	return ALIGN(size, 8);

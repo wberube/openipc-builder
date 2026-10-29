@@ -1,0 +1,17 @@
+# ak3918ev200_lite — Meari Mini 7C.
+#
+# The Meari Mini 7C carries an RTL8188FTV (rtl8188fu). The generic EV200 image
+# also builds the RTL8188EU and MT7601U drivers and the RDA5995 module;
+# strip those unused radios so the 5 MiB rootfs has room for rtl8188fu.
+# CEC and v4l2-compliance are diagnostics this board does not need;
+# v4l2-ctl stays for camera bring-up.
+/lib/modules/4.4.302/kernel/drivers/staging/rtl8188eu/r8188eu.ko
+/lib/modules/4.4.302/kernel/drivers/net/wireless/mediatek/mt7601u/mt7601u.ko
+/lib/modules/4.4.302/extra/rdawfmac.ko
+# No modem on this board; the generic image ships the USB serial stack.
+/lib/modules/4.4.302/kernel/drivers/usb/serial/option.ko
+/lib/modules/4.4.302/kernel/drivers/usb/serial/usb_wwan.ko
+/lib/modules/4.4.302/kernel/drivers/usb/serial/usbserial.ko
+/usr/bin/cec-compliance
+/usr/bin/cec-ctl
+/usr/bin/v4l2-compliance
